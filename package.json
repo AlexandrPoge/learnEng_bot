@@ -9,9 +9,11 @@
   "scripts": {
     "start": "node --env-file=.env dist/apps/bot/src/main.js",
     "bot:setup": "node --env-file=.env dist/scripts/setup-bot.js",
+    "bot:commands": "node --env-file=.env dist/scripts/setup-bot.js --commands-only",
     "demo": "node --import tsx scripts/demo.ts",
     "demo:send": "node --env-file=.env --import tsx scripts/demo.ts --send-admin",
     "preview:classes": "node --env-file=.env --import tsx scripts/preview-classrooms.ts",
+    "preview:textbook": "node --env-file=.env --import tsx scripts/preview-textbook.ts",
     "test": "node --import tsx --test tests/unit/*.test.ts tests/integration/*.test.ts",
     "check": "tsc --noEmit",
     "build": "tsc"

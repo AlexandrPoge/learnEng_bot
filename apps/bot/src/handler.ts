@@ -1,5 +1,5 @@
 import { randomUUID, randomBytes } from 'node:crypto';
-import { gradeAnswer, buildReport } from '../../../packages/domain/grading.js';
+import { gradeAnswer, buildReport, completionNotice } from '../../../packages/domain/grading.js';
 import { rolesFor } from '../../../packages/domain/roles.js';
 import { availableLessons, findLesson, handleEditor } from './editor.js';
 import { parseDeadline } from '../../../packages/domain/deadline.js';
@@ -9,6 +9,7 @@ import { splitMessage, richText, readable } from './format.js';
 import { handleClassrooms } from './classrooms.js';
 import { ruleImagePages } from './rule-images.js';
 import { recordActivity, timeSummary } from '../../../packages/domain/timing.js';
+import { schoolYears, schoolLessons } from '../../../packages/content/school.js';
 import type { BotState, User, Attempt, Assignment, Access, Category, Level, Section, RichText, TelegramPayload, TelegramResults, TelegramUpdate, ReplyMarkup } from '../../../packages/domain/types.js';
 
 function enqueue(state: BotState, method: keyof TelegramResults, payload: TelegramPayload, requiredTeacher = false) {
@@ -58,24 +59,103 @@ function showMode(state: BotState, user: User, messageId?: number) {
 
 function showHome(state: BotState, user: User, access: Access) {
   delete user.workspace;
-  send(state, user.id, `🌟 Английский шаг за шагом\n\n📚 Выбери тему A1 или A2.\n📖 Прочитай короткое правило.\n💡 Посмотри примеры.\n✏️ Попробуй ответить на 5 вопросов.\n\n${user.learningMode === 'adult' ? '🧑 Подача для взрослых' : '🧒 Простая подача для детей'}\n👇 Всё нужное — на кнопках внизу.`, { reply_markup: mainMenu(access) });
+  send(state, user.id, `🌟 Английский шаг за шагом\n\n📚 Открой «Учебник».\n🏫 Выбери школьный класс или 🌱 уровень A1–A2.\n📖 Найди тему, прочитай правило и примеры.\n✏️ Закрепи её упражнениями.\n\n${user.learningMode === 'adult' ? '🧑 Подача для взрослых' : '🧒 Простая подача для детей'}\n👇 Всё нужное — на кнопках внизу.`, { reply_markup: mainMenu(access) });
 }
 
 const categoryLabels: Record<Category, string> = { foundation: '🔤 Первые шаги', grammar: '📖 Грамматика', vocabulary: '🧺 Слова', situations: '💬 Общение' };
 
 function catalogReturn(user: User, level: Level) {
   if (user.classContext) return `class:topics:${user.classContext}:0`;
+  if (user.schoolCatalog) return `school:${user.schoolCatalog.grade}:${user.schoolCatalog.category ?? 'all'}:${user.schoolCatalog.page}`;
   const context = user.catalog;
   return context?.level === level ? `${context.category ? `g:${level}:${context.category}` : `l:${level}`}:${context.page}` : `l:${level}:0`;
 }
 
+function showTextbook(state: BotState, user: User, messageId?: number) {
+  delete user.classContext;
+  delete user.schoolCatalog;
+  panel(state, user, '📚 Учебник английского\n\n🏫 По школьным классам\nПодборки тем для знакомства, изучения и повторения.\n\n🌱 По уровням\nA1 — начинаем. A2 — продолжаем. Удобно и детям, и взрослым.\n\nВ каждой теме: правило, картинки, примеры, ловушки и упражнения.\n\n👇 Как будем искать тему?', { inline_keyboard: [
+    [{ text: '🏫 По школьным классам', callback_data: 'book:school' }],
+    [{ text: '🌱 По уровням A1–A2', callback_data: 'book:levels' }],
+    [{ text: '🏠 Главное меню', callback_data: 'home' }],
+  ] }, messageId);
+}
+
+function showSchoolYears(state: BotState, user: User, messageId?: number) {
+  delete user.classContext;
+  delete user.schoolCatalog;
+  const rows = [];
+  for (let i = 0; i < schoolYears.length; i += 2) rows.push(schoolYears.slice(i, i + 2).map(y => ({ text: `${y.grade} класс${y.revision ? ' · повторение' : ''}`, callback_data: `school:${y.grade}` })));
+  panel(state, user, '🏫 Учебник → школьные классы\n\nВыбери класс, затем раздел и тему. Учебную группу создавать не нужно.\n\n📚 Это подборки из нашей библиотеки A1–A2. Порядок тем в твоей школе может отличаться.\n\n🔁 Для 8–11 классов пока доступно повторение базы A1–A2; полного материала старших классов ещё нет.', { inline_keyboard: [...rows, [{ text: '🌱 По уровням', callback_data: 'book:levels' }, { text: '📚 Учебник', callback_data: 'book' }]] }, messageId);
+}
+
+function showSchool(state: BotState, user: User, grade: number, category?: Category | null, page = 0, messageId?: number) {
+  const year = schoolYears.find(y => y.grade === grade);
+  if (!year) return send(state, user.id, 'Такой класс не найден. Открой 📚 Учебник.');
+  delete user.classContext;
+  const all = schoolLessons(grade, availableLessons(state));
+  const completed = new Set(Object.values(state.attempts).filter(a => a.studentId === user.id && a.completedAt && !a.reviewOf).map(a => a.lesson.id));
+  const intro = `🏫 Учебник → ${grade} класс\n\n${year.focus}\n${year.revision ? '🔁 Повторение A1–A2, материал класса пока неполный.' : '📚 Подборка A1–A2; порядок тем можно уточнить у репетитора.'}\n\n✅ Пройдено тем: ${all.filter(l => completed.has(l.id)).length} из ${all.length}`;
+  if (category === undefined) {
+    user.schoolCatalog = { grade, category: null, page: 0 };
+    const categories = (Object.keys(categoryLabels) as Category[]).filter(c => all.some(l => l.category === c));
+    return panel(state, user, `${intro}\n\n👇 Выбери раздел.`, { inline_keyboard: [
+      ...categories.map(c => [{ text: `${categoryLabels[c]} · ${all.filter(l => l.category === c).length} тем`, callback_data: `school:${grade}:${c}:0` }]),
+      ...(all.length ? [[{ text: '📚 Все темы класса', callback_data: `school:${grade}:all:0` }]] : []),
+      [{ text: '🏫 Другой класс', callback_data: 'book:school' }, { text: '🌱 По уровням', callback_data: 'book:levels' }],
+    ] }, messageId);
+  }
+  const items = category ? all.filter(l => l.category === category) : all;
+  const pages = Math.max(1, Math.ceil(items.length / 5));
+  if (!Number.isInteger(page) || page < 0 || page >= pages) return send(state, user.id, 'Страница больше не доступна. Открой класс заново: /school');
+  user.schoolCatalog = { grade, category, page };
+  const prefix = `school:${grade}:${category ?? 'all'}`;
+  const arrows = [];
+  if (page > 0) arrows.push({ text: '⬅️ Назад', callback_data: `${prefix}:${page - 1}` });
+  if (page + 1 < pages) arrows.push({ text: 'Дальше ➡️', callback_data: `${prefix}:${page + 1}` });
+  panel(state, user, `${intro}\n\n${category ? categoryLabels[category] : '📚 Все темы класса'}\n📄 Страница ${page + 1} из ${pages}\n\n${items.length ? '👇 Выбери тему.' : 'В этом разделе пока нет тем. Выбери другой раздел или уровень.'}`, { inline_keyboard: [
+    ...items.slice(page * 5, page * 5 + 5).map(l => [{ text: `${completed.has(l.id) ? '✅' : l.icon ?? '📘'} ${l.title}`, callback_data: `t:${l.id}` }]),
+    ...(arrows.length ? [arrows] : []),
+    [{ text: `🗂 Разделы ${grade} класса`, callback_data: `school:${grade}` }],
+    [{ text: '🏫 Другой класс', callback_data: 'book:school' }, { text: '📚 Учебник', callback_data: 'book' }],
+  ] }, messageId);
+}
+
+function schoolPath(state: BotState, user: User, lessonId: string) {
+  if (!user.schoolCatalog) return undefined;
+  if (!schoolLessons(user.schoolCatalog.grade, availableLessons(state)).some(l => l.id === lessonId)) { delete user.schoolCatalog; return undefined; }
+  return `🏫 Учебник → ${user.schoolCatalog.grade} класс`;
+}
+
+function showResults(state: BotState, user: User, access: Access, page = 0, messageId?: number) {
+  if (!access.teacher) return send(state, user.id, 'Работы доступны репетитору и администратору.');
+  const attempts = Object.values(state.attempts).filter(a => a.completedAt && (access.admin || a.teacherId === user.id)).sort((a, b) => b.completedAt!.localeCompare(a.completedAt!));
+  const pages = Math.max(1, Math.ceil(attempts.length / 5));
+  if (!Number.isInteger(page) || page < 0 || page >= pages) return send(state, user.id, 'Страница не найдена. /results');
+  const rows = attempts.slice(page * 5, page * 5 + 5).map(a => [{ text: `👤 ${state.users[a.studentId]?.name.slice(0, 24) ?? 'Ученик'} · ${a.answers.filter(x => x.correct).length}/${a.lesson.questions.length} · ${a.lesson.title.slice(0, 42)}`, callback_data: `report:${a.id}` }]);
+  const arrows = [];
+  if (page > 0) arrows.push({ text: '⬅️ Назад', callback_data: `results:${page - 1}` });
+  if (page + 1 < pages) arrows.push({ text: 'Дальше ➡️', callback_data: `results:${page + 1}` });
+  panel(state, user, `📊 Работы учеников\n\n${attempts.length ? `Сдано работ: ${attempts.length}\n📄 Страница ${page + 1} из ${pages}\n\nВыбери работу: откроются ответы, оценка и время.` : 'Выполненных заданий пока нет.'}\n\n🔔 Уведомления: ${user.resultNotifications === 'off' ? 'выключены; результаты хранятся здесь' : 'только краткий результат'}.`, { inline_keyboard: [...rows, ...(arrows.length ? [arrows] : []), [{ text: '🔔 Настроить уведомления', callback_data: 'notify:results' }, { text: '🏠 Меню', callback_data: 'home' }]] }, messageId);
+}
+
+function showNotifications(state: BotState, user: User, access: Access, messageId?: number) {
+  if (!access.teacher) return send(state, user.id, 'Настройка доступна репетитору и администратору.');
+  panel(state, user, `🔔 Результаты учеников\n\nСейчас: ${user.resultNotifications === 'off' ? '🔕 уведомления выключены' : '🔔 короткие уведомления'}.\n\n🔔 Коротко — одно сообщение после сдачи: имя, задание, оценка и время. Ответы открываются по кнопке.\n\n🔕 Тихо — бот сохраняет работы без уведомлений. Смотри их в кабинете → «📊 Работы учеников».`, { inline_keyboard: [
+    [{ text: '🔔 Короткие уведомления', callback_data: 'notify:compact' }],
+    [{ text: '🔕 Без уведомлений', callback_data: 'notify:off' }],
+    [{ text: '📊 Работы учеников', callback_data: 'results:0' }],
+  ] }, messageId);
+}
+
 function showCatalog(state: BotState, user: User, level?: Level, page = 0, messageId?: number, category?: Category) {
   delete user.classContext;
+  delete user.schoolCatalog;
   const lessons = availableLessons(state);
   const levels = [...new Set(lessons.map((item) => item.level))].sort();
   if (!level) {
     panel(state, user, `📚 Библиотека английского\n\n🌱 A1 — первые шаги\n🌿 A2 — продолжаем учиться\n\n${lessons.length} тем · выбирай подходящую ниже.\n✅ означает, что ты уже закончил практику по теме.`, {
-      inline_keyboard: [...levels.map((value) => [{ text: `${value === 'A1' ? '🌱' : '🌿'} ${value} · ${lessons.filter((item) => item.level === value).length} тем`, callback_data: `l:${value}:0` }]), [{ text: '🏠 Главное меню', callback_data: 'home' }]],
+      inline_keyboard: [...levels.map((value) => [{ text: `${value === 'A1' ? '🌱' : '🌿'} ${value} · ${lessons.filter((item) => item.level === value).length} тем`, callback_data: `l:${value}:0` }]), [{ text: '🏫 По школьным классам', callback_data: 'book:school' }, { text: '📚 Учебник', callback_data: 'book' }]],
     }, messageId);
     return;
   }
@@ -101,6 +181,8 @@ function showCatalog(state: BotState, user: User, level?: Level, page = 0, messa
 }
 
 function showGroups(state: BotState, user: User, level: Level, messageId?: number) {
+  delete user.schoolCatalog;
+  delete user.classContext;
   const items = availableLessons(state).filter((item) => item.level === level);
   const groups = (Object.keys(categoryLabels) as Category[]).filter((category) => items.some((item) => (item.category ?? 'grammar') === category));
   panel(state, user, `🧭 Курс ${level}\n\n🔤 Первые шаги — алфавит, знакомство, числа.\n\n📖 Грамматика — как строить предложения.\n\n🧺 Слова — семья, дом, еда и другие темы.\n\n💬 Общение — полезные ситуации.\n\n👇 Выбери раздел.`, { inline_keyboard: [...groups.map((category) => [{ text: `${categoryLabels[category]} · ${items.filter((item) => (item.category ?? 'grammar') === category).length} тем`, callback_data: `g:${level}:${category}:0` }]), [{ text: '📚 Все темы', callback_data: `l:${level}:0` }, { text: '🏠 Меню', callback_data: 'home' }]] }, messageId);
@@ -118,13 +200,14 @@ function showLesson(state: BotState, user: User, id: string, messageId?: number)
   if (!lesson) return send(state, user.id, 'Тема не найдена. Выбери тему: /topics');
   user.selectedLesson = id;
   const page = Math.floor(availableLessons(state).filter((item) => item.level === lesson.level).findIndex((item) => item.id === id) / 5);
-  panel(state, user, topicCard(lesson, user.learningMode !== 'adult'), topicButtons(lesson, page, user.classContext || user.catalog ? catalogReturn(user, lesson.level) : undefined), messageId);
+  const path = schoolPath(state, user, id);
+  panel(state, user, topicCard(lesson, user.learningMode !== 'adult', path), topicButtons(lesson, page, user.classContext || user.catalog || user.schoolCatalog ? catalogReturn(user, lesson.level) : undefined), messageId);
 }
 
 function showSection(state: BotState, user: User, id: string, section: Section, page: number, messageId?: number) {
   const lesson = accessibleLesson(state, user, id);
   if (!lesson) return send(state, user.id, 'Тема не найдена. Открой 📚 Темы.');
-  const card = sectionCard(lesson, section, page, user.learningMode !== 'adult');
+  const card = sectionCard(lesson, section, page, user.learningMode !== 'adult', schoolPath(state, user, id));
   if (!card) return send(state, user.id, 'Эта карточка недоступна. Открой тему заново.');
   user.selectedLesson = id;
   user.reading = { lessonId: id, section, page, version: lesson.version };
@@ -135,7 +218,7 @@ function showSection(state: BotState, user: User, id: string, section: Section, 
   const buttons = [
     ...(pagination.length ? [pagination] : []),
     [{ text: '🗂 Разделы темы', callback_data: `t:${id}` }, { text: '✏️ Практика', callback_data: `p:${id}` }],
-    [{ text: `📚 Темы ${lesson.level}`, callback_data: catalogReturn(user, lesson.level) }, { text: '🏠 Меню', callback_data: 'home' }],
+    [{ text: user.schoolCatalog ? '🏫 Темы класса' : `📚 Темы ${lesson.level}`, callback_data: catalogReturn(user, lesson.level) }, { text: '🏠 Меню', callback_data: 'home' }],
   ];
   panel(state, user, card, { inline_keyboard: buttons }, messageId);
 }
@@ -199,7 +282,6 @@ function acceptAnswer(state: BotState, user: User, value: string, access: Access
     attempt.late = Date.parse(attempt.completedAt) > Date.parse(assignment.deadline);
   }
   user.activeAttempt = null;
-  const report = buildReport(attempt, user.name);
   const score = attempt.answers.filter((answer) => answer.correct).length;
   send(state, user.id, timeSummary(attempt));
   send(state, user.id, `🎉 Практика завершена!\n\n${attempt.lesson.icon ?? '📘'} ${attempt.lesson.title}\n✅ Верных ответов: ${score} из ${attempt.lesson.questions.length}\n\n${score === attempt.lesson.questions.length ? '🌟 Всё получилось!' : '🌱 Можно вернуться к примерам и попробовать ещё раз.'}`, { reply_markup: mainMenu(access) });
@@ -208,7 +290,7 @@ function acceptAnswer(state: BotState, user: User, value: string, access: Access
     ...(score < attempt.lesson.questions.length ? [[{ text: '🎯 Повторить только ошибки', callback_data: `repeat:${attempt.id}` }]] : []),
     [{ text: '🔁 Ещё раз', callback_data: `p:${attempt.lesson.id}` }, { text: '📚 Темы', callback_data: 'levels' }],
   ] } });
-  if (attempt.teacherId) send(state, attempt.teacherId, `Новое выполненное задание\n\n${report}`, { requiredTeacher: true });
+  if (attempt.teacherId && state.users[attempt.teacherId]?.resultNotifications !== 'off') send(state, attempt.teacherId, completionNotice(attempt, user.name), { requiredTeacher: true, reply_markup: { inline_keyboard: [[{ text: '🔎 Посмотреть работу', callback_data: `report:${attempt.id}` }, { text: '📊 Все результаты', callback_data: 'results:0' }]] } });
 }
 
 export function handleUpdate(state: BotState, update: TelegramUpdate, teacherIds: string[] = [], adminIds: string[] = []) {
@@ -232,7 +314,7 @@ export function handleUpdate(state: BotState, update: TelegramUpdate, teacherIds
     notify: (recipient: string, value: string, extra?: TelegramPayload) => send(state, recipient, value, extra),
     panel: (value: string, markup: ReplyMarkup) => panel(state, user, value, markup, callback?.message?.message_id),
     editor: (value: string) => { handleEditor(state, user, value, { teacher, admin, send: (v, extra) => send(state, id, v, extra) }); },
-    topic: (topicId: string) => showLesson(state, user, topicId, message?.message_id),
+    topic: (topicId: string) => { delete user.schoolCatalog; showLesson(state, user, topicId, message?.message_id); },
   };
 
   if (callback) {
@@ -242,6 +324,24 @@ export function handleUpdate(state: BotState, update: TelegramUpdate, teacherIds
     const messageId = message!.message_id;
     if (handleClassrooms(state, user, { data }, classroomContext)) return;
     if (data === 'home') return showHome(state, user, access);
+    const resultPage = /^results:(\d+)$/u.exec(data);
+    if (resultPage) return showResults(state, user, access, Number(resultPage[1]), messageId);
+    const teacherReport = /^report:([a-f0-9]{16})$/u.exec(data);
+    if (teacherReport) {
+      const attempt = state.attempts[teacherReport[1]];
+      if (!teacher || !attempt?.completedAt || (!admin && attempt.teacherId !== id)) return send(state, id, 'Нет доступа к работе.');
+      return send(state, id, buildReport(attempt, state.users[attempt.studentId]?.name ?? 'Ученик'), { requiredTeacher: true, reply_markup: { inline_keyboard: [[{ text: '📊 К списку работ', callback_data: 'results:0' }]] } });
+    }
+    if (['notify:results', 'notify:compact', 'notify:off'].includes(data)) {
+      if (!teacher) return send(state, id, 'Настройка доступна репетитору и администратору.');
+      if (data !== 'notify:results') user.resultNotifications = data === 'notify:off' ? 'off' : 'compact';
+      return showNotifications(state, user, access, messageId);
+    }
+    if (data === 'book') return showTextbook(state, user, messageId);
+    if (data === 'book:school') return showSchoolYears(state, user, messageId);
+    if (data === 'book:levels') return showCatalog(state, user, undefined, 0, messageId);
+    const schoolMatch = /^school:(\d{1,2})(?::(foundation|grammar|vocabulary|situations|all):(\d+))?$/u.exec(data);
+    if (schoolMatch) return showSchool(state, user, Number(schoolMatch[1]), schoolMatch[2] ? schoolMatch[2] === 'all' ? null : schoolMatch[2] as Category : undefined, Number(schoolMatch[3] ?? 0), messageId);
     if (data === 'levels') return showCatalog(state, user, undefined, 0, messageId);
     if (data === 'mode') return showMode(state, user, messageId);
     const groupsMatch = /^groups:(A1|A2)$/u.exec(data);
@@ -311,7 +411,7 @@ export function handleUpdate(state: BotState, update: TelegramUpdate, teacherIds
     }
     const editActions: Record<string, string> = { 'editor:type:choice': 'choice', 'editor:type:text': 'text', 'editor:photo': '/attach_rule', 'editor:no-photo': '/remove_rule_photo', 'editor:preview': '/preview', 'editor:publish': '/publish', 'editor:discard': '/discard', 'editor:add': '/add_question', 'editor:title': '/title', 'editor:rule': '/rule', 'editor:examples': '/examples', 'editor:traps': '/traps', 'editor:help': '/editor_help' };
     if (data.startsWith('editor:type:') && state.editors?.[id]?.step !== 'type') return send(state, id, 'Выбор типа уже завершён. Продолжи текущий вопрос.');
-    const editorExtra: Record<string, string> = { 'editor:back': '/editor', 'editor:questions': '/questions', 'editor:level': '/level', 'editor:level:A1': '/level A1', 'editor:level:A2': '/level A2' };
+    const editorExtra: Record<string, string> = { 'editor:grades': '/school_grades', 'editor:back': '/editor', 'editor:questions': '/questions', 'editor:level': '/level', 'editor:level:A1': '/level A1', 'editor:level:A2': '/level A2' };
     if (Object.hasOwn(editorExtra, data)) return handleEditor(state, user, editorExtra[data], { teacher, admin, send: (value, extra) => send(state, id, value, extra) });
     if (editMatch || editPage || Object.hasOwn(editActions, data)) return handleEditor(state, user, editMatch ? `/edit ${editMatch[1]}` : editPage ? `/editor ${editPage[1]}` : editActions[data], { teacher, admin, send: (value, extra) => send(state, id, value, extra) });
     const homeworkMatch = /^h:([a-f0-9]{16})$/u.exec(data);
@@ -354,7 +454,13 @@ export function handleUpdate(state: BotState, update: TelegramUpdate, teacherIds
   if (handleClassrooms(state, user, { text }, classroomContext)) return;
   const [rawCommand, argument] = text.split(/\s+/u);
   const command = rawCommand.split('@')[0].toLowerCase();
+  if (command === '/textbook') return showTextbook(state, user);
+  if (command === '/notifications') return showNotifications(state, user, access);
+  if (command === '/results') return showResults(state, user, access);
+  if (command === '/school') return argument ? showSchool(state, user, Number(argument)) : showSchoolYears(state, user);
   if (command === '/search' || (user.searching && !text.startsWith('/'))) {
+    delete user.schoolCatalog;
+    delete user.classContext;
     const query = command === '/search' ? text.slice(rawCommand.length).trim() : text;
     user.searching = !query;
     if (!query) return send(state, id, '🔎 Напиши название или слово из темы.\n\nНапример:\n• семья\n• артикли\n• Past Simple\n\nДля выхода нажми 🏠 Главное меню.');
@@ -375,7 +481,7 @@ export function handleUpdate(state: BotState, update: TelegramUpdate, teacherIds
   if (command === '/mode') return showMode(state, user);
   if (command === '/teacher') {
     if (!teacher) return send(state, id, 'Кабинет доступен репетитору.');
-    return send(state, id, '👩‍🏫 Кабинет репетитора\n\n🏫 Мои классы — ученики, темы, домашние задания.\n📝 Мои ДЗ — создать своё задание и назначить.\n📤 Отправленные работы — кто сдал, ответы и время.\n✏️ Редактор — общие материалы учебника.\n\n👇 Выбери действие.', { reply_markup: { keyboard: [['🏫 Мои классы', '📝 Мои ДЗ'], ['📤 Отправленные работы', '📊 Работы учеников'], ['✏️ Редактор', '👥 Ученики'], ['🔗 Пригласить ученика'], ['🏠 Главное меню']], resize_keyboard: true } });
+    return send(state, id, '👩‍🏫 Кабинет репетитора\n\n📚 Учебник — материалы по школьным классам и уровням.\n👥 Учебные группы — участники и групповые задания.\n📝 Мои ДЗ — создать и назначить задание.\n📤 Отправленные работы — ответы и время.\n✏️ Редактор — материалы учебника и их школьные классы.\n\n👇 Выбери действие.', { reply_markup: { keyboard: [['📚 Учебник', '👥 Учебные группы'], ['📝 Мои ДЗ', '📤 Отправленные работы'], ['📊 Работы учеников', '✏️ Редактор'], ['👥 Ученики', '🔗 Пригласить ученика'], ['🏠 Главное меню']], resize_keyboard: true } });
   }
   if (['/admin', '/add_teacher', '/remove_teacher'].includes(command)) {
     if (!admin) return send(state, id, 'Команда доступна администратору.');
@@ -429,7 +535,7 @@ export function handleUpdate(state: BotState, update: TelegramUpdate, teacherIds
       if (!user.learningMode) showMode(state, user);
       return;
     }
-    send(state, id, 'Добро пожаловать!\n/classes — мои классы, темы и задания\n/join_class КОД — вступить в класс\n/topics — каталог тем по уровням\n/topics A1 — темы уровня\n/lesson to-be — открыть конкретную тему\n/practice — практика по выбранной теме или продолжение\n/practice past-simple — практика по указанной теме\n/progress — результаты\n/cancel — отменить текущую попытку\n/join КОД — подключиться к репетитору и отправлять ему ответы на будущие задания\n/whoami — твой ID' +
+    send(state, id, 'Добро пожаловать!\n/textbook — учебник: школьные классы и уровни\n/school — темы по школьным классам\n/classes — учебные группы репетитора\n/join_class КОД — вступить в учебную группу\n/topics — каталог тем по уровням\n/topics A1 — темы уровня\n/lesson to-be — открыть конкретную тему\n/practice — практика по выбранной теме или продолжение\n/practice past-simple — практика по указанной теме\n/progress — результаты\n/cancel — отменить текущую попытку\n/join КОД — подключиться к репетитору и отправлять ему ответы на будущие задания\n/whoami — твой ID' +
       '\n/homework — мои домашние задания\n/continue — продолжить с места остановки\n/mode — выбрать подачу\n/menu — главное меню\n\n⬇️ Объяснения приходят новыми карточками внизу чата.' + (teacher ? '\n\n👩‍🏫 /teacher — кабинет репетитора\n/editor — создать или исправить урок\n/invite — одноразовый код ученику (24 часа)\n/students — ученики и ID\n/assign ID_УЧЕНИКА ID_ТЕМЫ СРОК — назначить ДЗ\n/results — последние работы' : '') + (admin ? '\n/admin — управление ролями и полный доступ' : ''), { reply_markup: mainMenu(access) });
   } else if (command === '/topics' || text === '📚 Темы') {
     showCatalog(state, user, command === '/topics' ? argument?.toUpperCase() as Level : undefined);
@@ -459,15 +565,10 @@ export function handleUpdate(state: BotState, update: TelegramUpdate, teacherIds
     delete state.invites[argument];
     send(state, id, 'Ты подключён! Ответы на новые задания будут отправляться репетитору.');
     send(state, user.teacherId, `Подключился ученик: ${user.name}`);
-  } else if (command === '/students' || command === '/results') {
+  } else if (command === '/students') {
     if (!teacher) return send(state, id, 'Команда доступна репетитору.');
     const students = Object.values(state.users).filter((student) => admin || student.teacherId === id || Object.values(state.classes ?? {}).some(c => c.ownerId === id && c.studentIds.includes(student.id)));
-    if (command === '/students') send(state, id, students.map((student) => `${student.name} · ${student.id}`).join('\n') || 'Учеников пока нет. Создай /invite');
-    else {
-      const attempts = Object.values(state.attempts).filter((attempt) => (admin || attempt.teacherId === id) && attempt.completedAt).slice(-5);
-      if (!attempts.length) send(state, id, 'Выполненных заданий пока нет.');
-      for (const attempt of attempts) send(state, id, buildReport(attempt, state.users[attempt.studentId].name));
-    }
+    send(state, id, students.map((student) => `${student.name} · ${student.id}`).join('\n') || 'Учеников пока нет. Создай /invite');
   } else if (command === '/progress' || text === '📊 Мой прогресс') {
     const attempts = Object.values(state.attempts).filter((attempt) => attempt.studentId === id && attempt.completedAt);
     send(state, id, attempts.length ? attempts.slice(-10).map((attempt) => `${attempt.reviewOf ? '🔁 Повторение ошибок' : '✏️ Практика'} · ${attempt.lesson.title}: ${attempt.answers.filter((answer) => answer.correct).length}/${attempt.lesson.questions.length}`).join('\n') : 'Результатов пока нет. Начать: /practice');

@@ -11,6 +11,7 @@ export interface Lesson {
   id: string; title: string; level: Level; category: Category; version: number;
   estimatedMinutes: number; theory: string; questions: Question[];
   icon?: string; goal?: string; memory?: string; childIntro?: string; resources?: Resource[]; rulePhoto?: string;
+  schoolGrades?: number[];
 }
 export interface Answer { questionId: string; value: string; correct: boolean }
 export interface Attempt {
@@ -25,6 +26,8 @@ export interface User {
   learningMode?: 'child' | 'adult'; selectedLesson?: string; searching?: boolean;
   reading?: { lessonId: string; section: Section; page: number; version: number };
   catalog?: { level: Level; page: number; category: Category | null };
+  schoolCatalog?: { grade: number; page: number; category: Category | null };
+  resultNotifications?: 'compact' | 'off';
   classContext?: string;
   workspace?: { kind: 'class'; nonce: string; name?: string; classId?: string } | {
     kind: 'assign'; nonce: string; lesson: Lesson; target?: { kind: 'student' | 'class'; id: string };

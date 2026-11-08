@@ -16,6 +16,7 @@ function draftButtons() {
   return { inline_keyboard: [
     [{ text: '🏷 Название', callback_data: 'editor:title' }, { text: '📖 Правило', callback_data: 'editor:rule' }],
     [{ text: '🌱 Уровень', callback_data: 'editor:level' }, { text: '🔧 Изменить вопросы', callback_data: 'editor:questions' }],
+    [{ text: '🏫 Школьные классы', callback_data: 'editor:grades' }],
     [{ text: '💡 Примеры', callback_data: 'editor:examples' }, { text: '⚠️ Ловушки', callback_data: 'editor:traps' }],
     [{ text: '🖼 Своя картинка правила', callback_data: 'editor:photo' }, { text: '🧽 Убрать картинку', callback_data: 'editor:no-photo' }],
     [{ text: '➕ Вопрос', callback_data: 'editor:add' }, { text: '👀 Предпросмотр', callback_data: 'editor:preview' }],
@@ -29,7 +30,7 @@ export function handleEditor(state: BotState, user: User, text: string, { teache
   const [raw, ...parts] = text.split(/\s+/u);
   const command = raw.split('@')[0].toLowerCase();
   const body = text.slice(raw.length).trim();
-  const commands = ['/editor', '/editor_help', '/edit', '/new', '/new_homework', '/edit_homework', '/attach_rule', '/remove_rule_photo', '/questions', '/question', '/title', '/level', '/theory', '/rule', '/examples', '/traps', '/add_question', '/edit_question', '/remove_question', '/preview', '/publish', '/discard', '/history', '/restore'];
+  const commands = ['/editor', '/editor_help', '/edit', '/new', '/new_homework', '/edit_homework', '/attach_rule', '/remove_rule_photo', '/questions', '/question', '/school_grades', '/title', '/level', '/theory', '/rule', '/examples', '/traps', '/add_question', '/edit_question', '/remove_question', '/preview', '/publish', '/discard', '/history', '/restore'];
   state.editors ??= {};
   let draft = state.editors[user.id];
   if (!commands.includes(command) && !((draft?.step || draft?.inputField) && !text.startsWith('/'))) return false;
@@ -102,6 +103,18 @@ export function handleEditor(state: BotState, user: User, text: string, { teache
     return true;
   }
   if (!draft) { send('Сначала открой /edit ID или /new ID'); return true; }
+  if (command === '/school_grades') {
+    if (draft.destination === 'homework') { send('Свои ДЗ назначаются ученикам или группам. Школьные классы выбираются для тем общего учебника.'); return true; }
+    if (draft.step || draft.awaitingPhoto) { send('Сначала закончи вопрос или картинку.'); return true; }
+    if (!body) {
+      draft.inputField = 'school_grades';
+      send('🏫 В каких школьных классах показывать тему?\n\nОтправь номера от 1 до 11 через запятую: 3, 4, 5\n0 — оставить только в уровнях.\n\nЭто разделы учебника, не группы учеников. Изменение применится после публикации.'); return true;
+    }
+    const grades = body === '0' ? [] : body.split(/[,\s]+/u).map(Number);
+    if (grades.some(g => !Number.isInteger(g) || g < 1 || g > 11)) { draft.inputField = 'school_grades'; send('Нужны номера от 1 до 11, например 3, 4, 5. Или 0 — убрать из школьных классов.'); return true; }
+    draft.lesson.schoolGrades = [...new Set(grades)].sort((a, b) => a - b);
+    send(`✅ В черновике: ${grades.length ? `классы ${draft.lesson.schoolGrades.join(', ')}` : 'только уровни'}.`, { reply_markup: draftButtons() }); return true;
+  }
   if (command === '/questions' || command === '/question') {
     if (draft.step || draft.inputField || draft.awaitingPhoto) { send('Сначала закончи текущее поле, картинку или вопрос.'); return true; }
     if (command === '/questions') {

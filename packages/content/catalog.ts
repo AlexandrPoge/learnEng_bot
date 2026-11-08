@@ -28,6 +28,7 @@ export function validateCatalog(items = lessons) {
   for (const item of items) {
     if (!/^[a-z0-9-]{1,40}$/u.test(item.id) || ids.has(item.id)) throw new Error(`Некорректный или повторный ID темы: ${item.id}`);
     ids.add(item.id);
+    if (item.schoolGrades !== undefined && (!Array.isArray(item.schoolGrades) || item.schoolGrades.some(g => !Number.isInteger(g) || g < 1 || g > 11) || new Set(item.schoolGrades).size !== item.schoolGrades.length)) throw new Error(`Некорректные школьные классы: ${item.id}`);
     if (!['A1', 'A2', 'B1', 'B2', 'C1', 'C2'].includes(item.level) || !item.title?.trim() || !item.theory?.trim() || !Number.isInteger(item.version) || item.version < 1) throw new Error(`Некорректная тема: ${item.id}`);
     if (!item.questions?.length) throw new Error(`Нет упражнений: ${item.id}`);
     const questionIds = new Set();

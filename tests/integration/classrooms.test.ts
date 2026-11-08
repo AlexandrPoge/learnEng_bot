@@ -24,7 +24,7 @@ function harness(initial: BotState = emptyState()) {
     assert.fail(`No item ${label}`);
   };
   const makeClass = () => {
-    send(10, '/classes'); press(10, 'Создать класс'); send(10, '3 класс'); press(10, 'A1');
+    send(10, '/classes'); press(10, 'Создать группу'); send(10, '3 класс'); press(10, 'A1');
     const c = Object.values(state.classes!)[0];
     press(10, 'Добавить темы'); seek(10, 'Present Simple'); press(10, 'Готово');
     press(10, 'Приглашение');
@@ -76,7 +76,7 @@ test('visible Telegram journey: class → own homework → class assignment → 
   assert.equal(attempt.answers.length, 1); assert.equal(attempt.hintsUsed, undefined);
   send(20, 'am');
   assert.ok(task.completedAt); assert.equal(task.attemptId, attempt.id);
-  assert.ok(h.payloads(10).some(p => p.text?.includes('Ответ: am') && p.text.includes('Между действиями')));
+  assert.ok(h.payloads(10).some(p => p.text?.includes('Новое выполненное') && p.text.includes('Между действиями') && !p.text.includes('Ответ:')));
   send(10, '/sent_homework'); press(10, 'Первое своё задание'); press(10, 'User 20');
   assert.match(last(10).text!, /Результат: 1\/2/u); assert.match(last(10).text!, /She → is/u);
   click(11, `work:result:${task.id}`); assert.match(last(11).text!, /Нет доступа/u);

@@ -23,7 +23,7 @@ function harness() {
 }
 
 test('student joins teacher, finishes quiz, and teacher gets original answers', () => {
-  const { state, text, click } = harness();
+  const { state, text, click, action } = harness();
   text(10, '/invite');
   const code = Object.keys(state.invites)[0];
   text(20, `/join ${code}`);
@@ -45,8 +45,10 @@ test('student joins teacher, finishes quiz, and teacher gets original answers', 
   assert.equal(state.attempts[id].answers.filter((answer) => answer.correct).length, 4);
   const reports = state.outbox.filter((task) => task.payload.chat_id === '10' && task.payload.text?.includes('Новое выполненное'));
   assert.equal(reports.length, 1);
-  assert.match(reports[0].payload.text, /Ответ: plays/u);
+  assert.doesNotMatch(reports[0].payload.text, /Ответ:/u);
   assert.match(reports[0].payload.text, /4\/5/u);
+  action(10, `report:${id}`);
+  assert.ok(state.outbox.some(task => task.payload.chat_id === '10' && task.payload.text?.includes('Ответ: plays')));
   state.outbox = [];
   text(11, '/results');
   assert.equal(state.outbox.some((task) => task.payload.text?.includes('Ответ:')), false);

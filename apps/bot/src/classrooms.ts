@@ -39,7 +39,7 @@ function showClass(state: BotState, user: User, c: Classroom, ctx: Context) {
       [button('➕ Добавить темы', `class:pick:${c.id}:0`), button('📨 Назначить ДЗ', 'work:list:0')],
       [button('✏️ Название класса', `class:rename:${c.id}`), button('🌱 Уровень класса', `class:change-level:${c.id}`)],
     ] : []),
-    [button('🏫 Все классы', 'class:list:0'), button('🏠 Меню', 'home')],
+    [button('👥 Учебные группы', 'class:list:0'), button('🏠 Меню', 'home')],
   ] });
 }
 
@@ -140,7 +140,7 @@ export function handleClassrooms(state: BotState, user: User, input: { text?: st
     if (action === 'list') {
       delete user.classContext;
       const classes = Object.values(state.classes ?? {}).filter(c => canRead(c, user, ctx));
-      ctx.panel(`🏫 Мои классы\n\n${classes.length ? 'Класс → темы → домашние задания. Выбери свой класс.' : 'Классов пока нет. ' + (ctx.teacher ? 'Создай класс и пригласи учеников.' : 'Попроси у репетитора команду /join_class с кодом.')}\n\nКласс может быть школьным или взрослой группой.`, paged(classes, Number(id), c => [button(`${c.name} · ${c.level}`, `class:view:${c.id}`)], p => `class:list:${p}`, [...(ctx.teacher ? [[button('➕ Создать класс', 'class:new')]] : []), [button('🏠 Меню', 'home')]]));
+      ctx.panel(`👥 Учебные группы\n\n${classes.length ? 'Выбери группу учеников: участники, темы и домашние задания.' : 'Групп пока нет. ' + (ctx.teacher ? 'Создай группу и пригласи учеников.' : 'Попроси у репетитора команду /join_class с кодом.')}\n\n🏫 Темы по школьным классам находятся в «📚 Учебнике».`, paged(classes, Number(id), c => [button(`${c.name} · ${c.level}`, `class:view:${c.id}`)], p => `class:list:${p}`, [...(ctx.teacher ? [[button('➕ Создать группу', 'class:new')]] : []), [button('📚 Учебник', 'book'), button('🏠 Меню', 'home')]]));
       return true;
     }
     if (action === 'new') {

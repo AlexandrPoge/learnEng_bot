@@ -44,6 +44,8 @@ test('assigned homework is scoped, uses a frozen lesson and cannot be submitted 
   send(20, '/homework');
   assert.match(state.outbox.at(-1).payload.text, /Сдано/u);
   send(99, '/results');
+  assert.equal(state.outbox.at(-1).payload.text.includes('Ответ:'), false);
+  click(99, `report:${attempt.id}`);
   assert.ok(state.outbox.at(-1).payload.text.includes('Ответ:'));
   send(11, '/results');
   assert.equal(state.outbox.at(-1).payload.text.includes('Ответ:'), false);
