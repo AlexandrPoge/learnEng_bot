@@ -14,3 +14,5 @@ jobs:
       - run: npm run check
       - run: npm run build
       - run: npm test
+      - run: npm run cloud:check
+      - run: npm run cloud:test

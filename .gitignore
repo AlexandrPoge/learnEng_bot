@@ -8,3 +8,7 @@ data/
 coverage/
 *.log
 .DS_Store
+.wrangler/
+.cloud-build/
+.dev.vars
+.cloud-secrets.json

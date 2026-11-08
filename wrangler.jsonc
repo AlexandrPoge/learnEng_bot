@@ -1,0 +1,13 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "learneng-telegram-bot",
+  "main": "apps/cloud/src/worker.ts",
+  "compatibility_date": "2026-11-08",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
+  "preview_urls": false,
+  "durable_objects": { "bindings": [{ "name": "BOT", "class_name": "LearningBot" }] },
+  "migrations": [{ "tag": "v1-sqlite", "new_sqlite_classes": ["LearningBot"] }],
+  "rules": [{ "type": "Data", "globs": ["**/*.ttf"], "fallthrough": true }],
+  "observability": { "enabled": false }
+}

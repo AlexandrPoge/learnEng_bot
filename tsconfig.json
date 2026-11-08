@@ -6,6 +6,6 @@
     "rootDir": ".", "outDir": "dist", "sourceMap": true,
     "noEmitOnError": true, "forceConsistentCasingInFileNames": true
   },
-  "include": ["apps/bot/**/*.ts", "packages/**/*.ts", "scripts/**/*.ts"],
+  "include": ["apps/bot/**/*.ts", "apps/cloud/**/*.ts", "packages/**/*.ts", "scripts/**/*.ts"],
   "exclude": ["node_modules", "dist", "apps/web"]
 }

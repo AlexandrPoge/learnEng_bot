@@ -7,7 +7,7 @@ import { mainMenu, topicButtons, topicCard, sectionCard, textActions } from './n
 import { lessonSections } from '../../../packages/content/presentation.js';
 import { splitMessage, richText, readable } from './format.js';
 import { handleClassrooms } from './classrooms.js';
-import { ruleImagePages } from './rule-images.js';
+import { ruleImagePages } from './rule-layout.js';
 import { recordActivity, timeSummary } from '../../../packages/domain/timing.js';
 import { schoolYears, schoolLessons, grammarStrands, lessonStrand } from '../../../packages/content/school.js';
 import type { BotState, User, Attempt, Assignment, Access, Category, GrammarStrand, Level, Section, RichText, TelegramPayload, TelegramResults, TelegramUpdate, ReplyMarkup } from '../../../packages/domain/types.js';

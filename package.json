@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "engines": {
-    "node": ">=20.19"
+    "node": ">=22.0.0"
   },
   "scripts": {
     "start": "node --env-file=.env dist/apps/bot/src/main.js",
@@ -14,16 +14,24 @@
     "demo:send": "node --env-file=.env --import tsx scripts/demo.ts --send-admin",
     "preview:classes": "node --env-file=.env --import tsx scripts/preview-classrooms.ts",
     "preview:textbook": "node --env-file=.env --import tsx scripts/preview-textbook.ts",
+    "cloud:check": "wrangler deploy --dry-run --outdir .cloud-build",
+    "cloud:deploy": "wrangler deploy",
+    "cloud:test": "node --import tsx --test tests/cloud/*.test.ts",
+    "cloud:control": "node --env-file=.env --import tsx scripts/cloud-control.ts",
     "test": "node --import tsx --test tests/unit/*.test.ts tests/integration/*.test.ts",
     "check": "tsc --noEmit",
     "build": "tsc"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261108.1",
     "@types/node": "^22.20.5",
+    "miniflare": "^5.20261104.0-beta",
     "tsx": "^4.23.15",
-    "typescript": "^7.0.2"
+    "typescript": "^7.0.2",
+    "wrangler": "^4.158.0"
   },
   "dependencies": {
+    "@resvg/resvg-wasm": "^2.6.2",
     "sharp": "^0.35.5"
   }
 }

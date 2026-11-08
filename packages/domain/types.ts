@@ -66,6 +66,7 @@ export interface TelegramResults {
   sendMessage: TelegramMessage; sendPhoto: TelegramMessage; editMessageText: TelegramMessage; editMessageReplyMarkup: TelegramMessage;
   answerCallbackQuery: boolean; setMyName: boolean; setMyDescription: boolean;
   setMyShortDescription: boolean; setMyCommands: boolean;
+  setWebhook: boolean; deleteWebhook: boolean;
 }
 export type TelegramApi = <M extends keyof TelegramResults>(method: M, payload?: TelegramPayload, signal?: AbortSignal) => Promise<TelegramResults[M]>;
 export interface OutboxTask { id: string; method: keyof TelegramResults; payload: TelegramPayload; requiredTeacher: boolean; ruleCard?: { lesson: Lesson; page: number } }
