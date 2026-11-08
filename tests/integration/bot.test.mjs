@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { emptyState, openStore } from '../../apps/bot/src/store.mjs';
 import { handleUpdate } from '../../apps/bot/src/handler.mjs';
+import { lessons, getLesson } from '../../packages/content/catalog.mjs';
 
 function harness() {
   const state = emptyState();
@@ -14,10 +15,11 @@ function harness() {
     handleUpdate(state, update, ['10', '11']);
     return update;
   };
-  const click = (id, attemptId, index, option) => handleUpdate(state, {
-    update_id: updateId++, callback_query: { id: `cb${updateId}`, from: { id }, message: { chat: { id, type: 'private' } }, data: `a:${attemptId}:${index}:${option}` },
+  const action = (id, data) => handleUpdate(state, {
+    update_id: updateId++, callback_query: { id: `cb${updateId}`, from: { id }, message: { chat: { id, type: 'private' } }, data },
   }, ['10', '11']);
-  return { state, text, click };
+  const click = (id, attemptId, index, option) => action(id, `a:${attemptId}:${index}:${option}`);
+  return { state, text, click, action };
 }
 
 test('student joins teacher, finishes quiz, and teacher gets original answers', () => {
@@ -89,4 +91,71 @@ test('attempt and pending reports survive restart; concurrent writer is rejected
     if (store) await store.close();
     await rm(directory, { recursive: true, force: true });
   }
+});
+
+test('catalog navigation, topic selection and practice resuming preserve the active lesson', () => {
+  const { state, text, action } = harness();
+  text(20, '/topics');
+  assert.ok(state.outbox.at(-1).payload.reply_markup.inline_keyboard.some((row) => row[0].callback_data === 'l:A1:0'));
+  action(20, 'l:A1:0');
+  const firstPage = state.outbox.at(-1).payload.reply_markup.inline_keyboard;
+  action(20, 'l:A1:1');
+  assert.notDeepEqual(state.outbox.at(-1).payload.reply_markup.inline_keyboard, firstPage);
+  action(20, 't:articles');
+  assert.equal(state.users['20'].selectedLesson, 'articles');
+  action(20, 'p:articles');
+  const id = state.users['20'].activeAttempt;
+  assert.equal(state.attempts[id].lesson.id, 'articles');
+  text(20, '/practice past-simple');
+  assert.equal(state.users['20'].activeAttempt, id);
+  assert.equal(state.attempts[id].lesson.id, 'articles');
+  action(20, 'p:unknown');
+  assert.equal(state.users['20'].activeAttempt, id);
+  text(20, '/cancel');
+  assert.ok(state.attempts[id].cancelledAt);
+  text(20, '/practice past-simple');
+  const secondId = state.users['20'].activeAttempt;
+  assert.equal(state.attempts[secondId].lesson.id, 'past-simple');
+  assert.notEqual(state.attempts[secondId].lesson, getLesson('past-simple'));
+  action(20, 'l:A1:999');
+  assert.match(state.outbox.at(-1).payload.text, /Страница не найдена/u);
+  text(20, '/topics B2');
+  assert.match(state.outbox.at(-1).payload.text, /пока не добавлен/u);
+});
+
+test('reply keyboard buttons open catalog and use the selected topic', () => {
+  const { state, text } = harness();
+  text(20, '📚 Темы');
+  assert.ok(state.outbox.at(-1).payload.reply_markup.inline_keyboard);
+  text(20, '/lesson pronouns');
+  text(20, '▶️ Практика');
+  const attempt = state.attempts[state.users['20'].activeAttempt];
+  assert.equal(attempt.lesson.id, 'pronouns');
+  text(20, '▶️ Практика');
+  assert.equal(state.users['20'].activeAttempt, attempt.id);
+});
+
+test('every published topic can be completed through the actual bot handler', () => {
+  const { state, text, click } = harness();
+  for (const lesson of lessons) {
+    text(20, `/practice ${lesson.id}`);
+    const id = state.users['20'].activeAttempt;
+    assert.equal(state.attempts[id].lesson.id, lesson.id);
+    for (const [index, question] of lesson.questions.entries()) {
+      if (question.type === 'choice') click(20, id, index, question.options.indexOf(question.accepted[0]));
+      else text(20, question.accepted[0]);
+    }
+    assert.equal(state.users['20'].activeAttempt, null, lesson.id);
+    assert.ok(state.attempts[id].completedAt, lesson.id);
+    assert.equal(state.attempts[id].answers.every((answer) => answer.correct), true, lesson.id);
+  }
+  for (const task of state.outbox) {
+    if (task.method !== 'sendMessage') continue;
+    assert.ok(task.payload.text.length <= 4096);
+    for (const row of task.payload.reply_markup?.inline_keyboard ?? []) {
+      for (const button of row) assert.ok(Buffer.byteLength(button.callback_data) <= 64);
+    }
+  }
+  text(20, '/topics A1');
+  assert.ok(state.outbox.at(-1).payload.reply_markup.inline_keyboard[0][0].text.startsWith('✅'));
 });

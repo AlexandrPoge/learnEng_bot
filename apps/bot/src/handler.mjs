@@ -1,5 +1,5 @@
 import { randomUUID, randomBytes } from 'node:crypto';
-import { lessons } from '../../../packages/content/present-simple.mjs';
+import { lessons, levels, getLesson } from '../../../packages/content/catalog.mjs';
 import { gradeAnswer, buildReport } from '../../../packages/domain/grading.mjs';
 
 const menu = {
@@ -31,13 +31,51 @@ function ask(state, user) {
   send(state, user.id, `${index + 1}/${attempt.lesson.questions.length}. ${question.prompt}`, extra);
 }
 
-function startLesson(state, user) {
+function showCatalog(state, user, level, page = 0) {
+  if (!level) {
+    send(state, user.id, `Библиотека: ${lessons.length} тем. Выбери уровень.\nУровни — ориентир для обучения.\n✅ — тема уже пройдена, это не оценка владения языком.`, {
+      reply_markup: { inline_keyboard: levels.map((value) => [{ text: `${value} · ${lessons.filter((item) => item.level === value).length} тем`, callback_data: `l:${value}:0` }]) },
+    });
+    return;
+  }
+  if (!levels.includes(level)) return send(state, user.id, 'Этот уровень пока не добавлен. Доступные уровни: /topics');
+  const items = lessons.filter((item) => item.level === level);
+  const pageCount = Math.ceil(items.length / 5);
+  if (!Number.isInteger(page) || page < 0 || page >= pageCount) return send(state, user.id, 'Страница не найдена. Открой /topics');
+  const completed = new Set(Object.values(state.attempts).filter((item) => item.studentId === user.id && item.completedAt).map((item) => item.lesson.id));
+  const rows = items.slice(page * 5, page * 5 + 5).map((item) => [{
+    text: `${completed.has(item.id) ? '✅ ' : ''}${item.title}`, callback_data: `t:${item.id}`,
+  }]);
+  const navigation = [];
+  if (page > 0) navigation.push({ text: '← Назад', callback_data: `l:${level}:${page - 1}` });
+  if (page + 1 < pageCount) navigation.push({ text: 'Далее →', callback_data: `l:${level}:${page + 1}` });
+  if (navigation.length) rows.push(navigation);
+  rows.push([{ text: 'Все уровни', callback_data: 'levels' }]);
+  send(state, user.id, `${level} · страница ${page + 1}/${pageCount}\nВыбери тему:`, { reply_markup: { inline_keyboard: rows } });
+}
+
+function showLesson(state, user, id) {
+  const lesson = getLesson(id);
+  if (!lesson) return send(state, user.id, 'Тема не найдена. Выбери тему: /topics');
+  user.selectedLesson = id;
+  send(state, user.id, `${lesson.title} · ${lesson.level} · около ${lesson.estimatedMinutes} мин\n\n${lesson.theory}`, {
+    reply_markup: { inline_keyboard: [
+      [{ text: '▶️ Практика по этой теме', callback_data: `p:${id}` }],
+      [{ text: `Другие темы ${lesson.level}`, callback_data: `l:${lesson.level}:0` }],
+    ] },
+  });
+}
+
+function startLesson(state, user, lessonId) {
+  const selected = getLesson(lessonId ?? user.selectedLesson ?? 'present-simple');
+  if (!selected) return send(state, user.id, 'Тема не найдена. Выбери тему: /topics');
   if (user.activeAttempt) {
-    send(state, user.id, 'Продолжим начатое задание. Для отмены: /cancel');
+    send(state, user.id, `Продолжим начатое задание: ${state.attempts[user.activeAttempt].lesson.title}. Для смены темы отмени попытку: /cancel`);
     ask(state, user);
     return;
   }
-  const lesson = structuredClone(lessons[0]);
+  const lesson = structuredClone(selected);
+  user.selectedLesson = lesson.id;
   const id = randomBytes(8).toString('hex');
   state.attempts[id] = {
     id, studentId: user.id, teacherId: user.teacherId ?? null,
@@ -77,6 +115,12 @@ export function handleUpdate(state, update, teacherIds = []) {
 
   if (callback) {
     enqueue(state, 'answerCallbackQuery', { callback_query_id: callback.id });
+    const data = callback.data ?? '';
+    if (data === 'levels') return showCatalog(state, user);
+    const catalogMatch = /^l:(A1|A2|B1|B2|C1|C2):(\d+)$/u.exec(data);
+    if (catalogMatch) return showCatalog(state, user, catalogMatch[1], Number(catalogMatch[2]));
+    const topicMatch = /^(t|p):([a-z0-9-]{1,40})$/u.exec(data);
+    if (topicMatch) return topicMatch[1] === 't' ? showLesson(state, user, topicMatch[2]) : startLesson(state, user, topicMatch[2]);
     const [, attemptId, index, optionIndex] = /^a:([a-f0-9]{16}):(\d+):(\d+)$/u.exec(callback.data ?? '') ?? [];
     const attempt = state.attempts[user.activeAttempt];
     if (!attempt || attempt.id !== attemptId || attempt.answers.length !== Number(index)) {
@@ -95,12 +139,15 @@ export function handleUpdate(state, update, teacherIds = []) {
   const command = rawCommand.split('@')[0].toLowerCase();
   if (command === '/whoami') return send(state, id, `Твой Telegram ID: ${id}\nРоль: ${teacher ? 'репетитор' : 'ученик'}`);
   if (command === '/start' || command === '/help' || text === '❓ Помощь') {
-    send(state, id, 'Добро пожаловать!\n/topics — объяснение темы\n/practice — начать или продолжить практику\n/progress — результаты\n/cancel — отменить текущую попытку\n/join КОД — подключиться к репетитору и отправлять ему ответы на будущие задания\n/whoami — твой ID' +
+    send(state, id, 'Добро пожаловать!\n/topics — каталог тем по уровням\n/topics A1 — темы уровня\n/lesson to-be — открыть конкретную тему\n/practice — практика по выбранной теме или продолжение\n/practice past-simple — практика по указанной теме\n/progress — результаты\n/cancel — отменить текущую попытку\n/join КОД — подключиться к репетитору и отправлять ему ответы на будущие задания\n/whoami — твой ID' +
       (teacher ? '\n\nРепетитору:\n/invite — одноразовый код ученику (24 часа)\n/students — мои ученики\n/results — последние работы моих учеников' : ''), { reply_markup: menu });
   } else if (command === '/topics' || text === '📚 Темы') {
-    send(state, id, `${lessons[0].title} · ${lessons[0].level}\n\n${lessons[0].theory}\n\nНачать: /practice`);
+    showCatalog(state, user, command === '/topics' ? argument?.toUpperCase() : undefined);
+  } else if (command === '/lesson') {
+    if (!argument) return showCatalog(state, user);
+    showLesson(state, user, argument);
   } else if (command === '/practice' || text === '▶️ Практика') {
-    startLesson(state, user);
+    startLesson(state, user, command === '/practice' ? argument : undefined);
   } else if (command === '/cancel') {
     if (user.activeAttempt) state.attempts[user.activeAttempt].cancelledAt = new Date().toISOString();
     user.activeAttempt = null;

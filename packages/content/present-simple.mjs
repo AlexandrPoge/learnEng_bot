@@ -40,5 +40,3 @@ export const presentSimple = {
     },
   ],
 };
-
-export const lessons = [presentSimple];
