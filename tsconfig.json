@@ -1,0 +1,11 @@
+{
+  "compilerOptions": {
+    "target": "ES2022", "module": "NodeNext", "moduleResolution": "NodeNext",
+    "lib": ["ES2023", "DOM"], "types": ["node"], "strict": true,
+    "useUnknownInCatchVariables": false, "skipLibCheck": true,
+    "rootDir": ".", "outDir": "dist", "sourceMap": true,
+    "noEmitOnError": true, "forceConsistentCasingInFileNames": true
+  },
+  "include": ["apps/bot/**/*.ts", "packages/**/*.ts", "scripts/**/*.ts"],
+  "exclude": ["node_modules", "dist", "apps/web"]
+}
