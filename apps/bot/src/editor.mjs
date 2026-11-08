@@ -101,14 +101,14 @@ export function handleEditor(state, user, text, { teacher, admin, send }) {
     if (!['A1', 'A2', 'B1', 'B2', 'C1', 'C2'].includes(level)) send('Укажи уровень A1–C2.');
     else { draft.lesson.level = level; send('Уровень сохранён.'); }
   } else if (command === '/theory') {
-    if (!body || body.length > 3500) send('Отправь /theory и текст до 3500 символов: правило, примеры и ловушки.');
+    if (!body || body.length > 12000) send('Отправь /theory и текст до 12000 символов: правило, примеры и ловушки.');
     else { draft.lesson.theory = body; delete draft.lesson.childIntro; delete draft.lesson.memory; send('📖 Объяснение сохранено в черновике.', { reply_markup: draftButtons() }); }
   } else if (['/rule', '/examples', '/traps'].includes(command)) {
-    if (body.length > 1500) { send('Сократи раздел до 1500 символов.'); return true; }
+    if (body.length > 5000) { send('Сократи раздел до 5000 символов или раздели его на несколько сообщений-команд.'); return true; }
     const sections = lessonSections(draft.lesson, { fallback: false });
     sections[command.slice(1)] = body.split('\n').filter((line) => line.trim());
     const theory = [sections.rule.join('\n'), `Примеры:\n${sections.examples.join('\n')}`, `Ловушки:\n${sections.traps.join('\n')}`].join('\n\n');
-    if (theory.length > 3500) { send('Весь урок должен помещаться в 3500 символов. Сократи раздел.'); return true; }
+    if (theory.length > 12000) { send('Весь урок должен помещаться в 12000 символов. Сократи раздел.'); return true; }
     draft.lesson.theory = theory;
     if (command === '/rule') { delete draft.lesson.childIntro; delete draft.lesson.memory; }
     send('✅ Раздел сохранён в черновике.', { reply_markup: draftButtons() });

@@ -41,14 +41,15 @@ test('child or adult mode changes presentation, never permissions or answers', (
   assert.equal(Object.hasOwn(state.users['30'], 'birthday'), false);
 });
 
-test('inline navigation edits one card and never opens an attempt by reading theory', () => {
+test('inline navigation sends a new card at the bottom and retires the previous controls', () => {
   const { state, text, click, last } = harness();
   text(30, '/lesson articles');
   assert.equal(last().method, 'sendMessage');
   assert.equal(last().payload.text.includes('I see a dog'), false);
   click(30, 's:articles:examples:0');
-  assert.equal(last().method, 'editMessageText');
-  assert.equal(last().payload.message_id, 50);
+  assert.equal(last().method, 'sendMessage');
+  assert.ok(state.outbox.some((task) => task.method === 'editMessageReplyMarkup' && task.payload.message_id === 50));
+  assert.ok(state.outbox.some((task) => task.method === 'answerCallbackQuery' && task.payload.text.includes('внизу')));
   assert.match(last().payload.text, /I see a dog/u);
   assert.equal(Object.keys(state.attempts).length, 0);
   click(30, 's:articles:examples:999');
@@ -101,7 +102,7 @@ test('answer review uses the attempt snapshot and is private to its student', ()
     else text(30, question.accepted[0]);
   }
   click(30, `review:${attempt.id}`);
-  assert.equal(last().method, 'editMessageText');
+  assert.equal(last().method, 'sendMessage');
   assert.match(last().payload.text, /Твой ответ: am/u);
   click(40, `review:${attempt.id}`);
   assert.match(last().payload.text, /твоей практики/u);

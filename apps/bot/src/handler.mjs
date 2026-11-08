@@ -4,6 +4,7 @@ import { rolesFor } from '../../../packages/domain/roles.mjs';
 import { availableLessons, findLesson, handleEditor } from './editor.mjs';
 import { parseDeadline } from '../../../packages/domain/deadline.mjs';
 import { mainMenu, topicButtons, topicCard, sectionCard, textActions } from './navigation.mjs';
+import { lessonSections } from '../../../packages/content/presentation.mjs';
 
 function enqueue(state, method, payload, requiredTeacher = false) {
   state.outbox.push({ id: randomUUID(), method, payload, requiredTeacher });
@@ -22,17 +23,18 @@ function ask(state, user) {
   const attempt = state.attempts[user.activeAttempt];
   const index = attempt.answers.length;
   const question = attempt.lesson.questions[index];
-  const extra = question.type === 'choice' ? {
-    reply_markup: { inline_keyboard: question.options.map((option, optionIndex) => [{
+  const choices = question.type === 'choice' ? question.options.map((option, optionIndex) => [{
       text: `${optionIndex + 1}. ${option}`, callback_data: `a:${attempt.id}:${index}:${optionIndex}`,
-    }]) },
-  } : {};
+    }]) : [];
+  const extra = { reply_markup: { inline_keyboard: [...choices, [{ text: '💡 Подсказка', callback_data: `hint:${attempt.id}:${index}` }]] } };
   send(state, user.id, `✏️ ${attempt.lesson.title}\n${'●'.repeat(index)}${'○'.repeat(attempt.lesson.questions.length - index)}\nВопрос ${index + 1}/${attempt.lesson.questions.length}\n\n${question.prompt}\n\n${question.type === 'choice' ? '👇 Выбери ответ кнопкой.' : '⌨️ Напиши пропущенное слово.'}`, extra);
 }
 
 function panel(state, user, text, replyMarkup, messageId) {
-  if (messageId) enqueue(state, 'editMessageText', { chat_id: user.id, message_id: messageId, text, reply_markup: replyMarkup });
-  else send(state, user.id, text, { reply_markup: replyMarkup });
+  // Изменение старой карточки не прокручивает Telegram. Новый экран всегда
+  // приходит вниз чата, а навигация предыдущего экрана отключается.
+  if (messageId) enqueue(state, 'editMessageReplyMarkup', { chat_id: user.id, message_id: messageId, reply_markup: { inline_keyboard: [] } });
+  send(state, user.id, text, { reply_markup: replyMarkup, link_preview_options: { is_disabled: true } });
 }
 
 function showMode(state, user, messageId) {
@@ -85,6 +87,7 @@ function showSection(state, user, id, section, page, messageId) {
   const card = sectionCard(lesson, section, page, user.learningMode !== 'adult');
   if (!card) return send(state, user.id, 'Эта карточка недоступна. Открой тему заново.');
   user.selectedLesson = id;
+  user.reading = { lessonId: id, section, page, version: lesson.version };
   const pagination = [];
   if (page > 0) pagination.push({ text: '⬅️ Назад', callback_data: `s:${id}:${section}:${page - 1}` });
   if (page + 1 < card.pages) pagination.push({ text: 'Дальше ➡️', callback_data: `s:${id}:${section}:${page + 1}` });
@@ -95,9 +98,20 @@ function showSection(state, user, id, section, page, messageId) {
   panel(state, user, card.text, { inline_keyboard: buttons }, messageId);
 }
 
-function startLesson(state, user, lessonId, assignment) {
+function showSources(state, user, id, messageId) {
+  const lesson = findLesson(state, id);
+  if (!lesson) return send(state, user.id, 'Тема не найдена. /topics');
+  const resources = lesson.resources ?? [];
+  const descriptions = resources.map((item, index) => `${index + 1}. ${item.kind === 'video' ? '🎬' : '📖'} ${item.title}\n${item.provider} · проверено ${item.checkedAt}\n${item.note}`);
+  panel(state, user, `📍 ${lesson.level} → ${lesson.title}\n🎬 Видео и источники\n\n${descriptions.join('\n\n') || 'К этой теме пока нет дополнительных ссылок.'}\n\n💡 Это внешние страницы на английском. Сначала прочитай правило здесь, затем найди 2–3 знакомые фразы в материале. После видео вернись к примерам или практике.`, { inline_keyboard: [
+    ...resources.map((item, index) => [{ text: `${item.kind === 'video' ? '🎬 Смотреть' : '📖 Читать'} ${index + 1}: ${item.title}`, url: item.url }]),
+    [{ text: '🗂 К теме', callback_data: `t:${id}` }, { text: '✏️ Практика', callback_data: `p:${id}` }],
+  ] }, messageId);
+}
+
+function startLesson(state, user, lessonId, assignment, reviewFrom) {
   if (state.editors?.[user.id]?.step) return send(state, user.id, 'Сначала закончи вопрос в редакторе или закрой черновик: /discard');
-  const selected = assignment?.lesson ?? findLesson(state, lessonId ?? user.selectedLesson ?? 'present-simple');
+  const selected = reviewFrom ? { ...reviewFrom.lesson, questions: reviewFrom.lesson.questions.filter((_, index) => !reviewFrom.answers[index].correct) } : assignment?.lesson ?? findLesson(state, lessonId ?? user.selectedLesson ?? 'present-simple');
   if (!selected) return send(state, user.id, 'Тема не найдена. Выбери тему: /topics');
   if (user.activeAttempt) {
     send(state, user.id, `Продолжим начатое задание: ${state.attempts[user.activeAttempt].lesson.title}. Для смены темы отмени попытку: /cancel`);
@@ -105,16 +119,19 @@ function startLesson(state, user, lessonId, assignment) {
     return;
   }
   const lesson = structuredClone(selected);
+  if (!lesson.questions.length) return send(state, user.id, '🌟 В этой попытке нет ошибок для повторения. Можно выбрать другую тему.');
   user.selectedLesson = lesson.id;
   const id = randomBytes(8).toString('hex');
   state.attempts[id] = {
     id, studentId: user.id, teacherId: user.teacherId ?? null,
     assignmentId: assignment?.id ?? null,
+    reviewOf: reviewFrom?.id ?? null,
     lesson, startedAt: new Date().toISOString(), completedAt: null, answers: [],
   };
   if (assignment) state.attempts[id].teacherId = assignment.teacherId;
+  if (reviewFrom) state.attempts[id].teacherId = reviewFrom.teacherId;
   user.activeAttempt = id;
-  send(state, user.id, `✏️ Практика: ${lesson.title}\n\n${lesson.questions.length} вопросов. После каждого ответа будет объяснение.\n💛 Ошибаться можно — так мы учимся.\n📖 Вернуться к правилу: /lesson ${lesson.id}`);
+  send(state, user.id, `${reviewFrom ? '🔁 Повторение ошибок' : '✏️ Практика'}: ${lesson.title}\n\n${lesson.questions.length} вопросов. После каждого ответа будет объяснение.\n💛 Ошибаться можно — так мы учимся.\n📖 Вернуться к правилу: /lesson ${lesson.id}`);
   ask(state, user);
 }
 
@@ -139,6 +156,7 @@ function acceptAnswer(state, user, value, access) {
   send(state, user.id, `🎉 Практика завершена!\n\n${attempt.lesson.icon ?? '📘'} ${attempt.lesson.title}\n✅ Верных ответов: ${score} из ${attempt.lesson.questions.length}\n\n${score === attempt.lesson.questions.length ? '🌟 Всё получилось!' : '🌱 Можно вернуться к примерам и попробовать ещё раз.'}`, { reply_markup: mainMenu(access) });
   send(state, user.id, '🧭 Что дальше?', { reply_markup: { inline_keyboard: [
     [{ text: '🔎 Разобрать ответы', callback_data: `review:${attempt.id}` }],
+    ...(score < attempt.lesson.questions.length ? [[{ text: '🎯 Повторить только ошибки', callback_data: `repeat:${attempt.id}` }]] : []),
     [{ text: '🔁 Ещё раз', callback_data: `p:${attempt.lesson.id}` }, { text: '📚 Темы', callback_data: 'levels' }],
   ] } });
   if (attempt.teacherId) send(state, attempt.teacherId, `Новое выполненное задание\n\n${report}`, { requiredTeacher: true });
@@ -161,7 +179,7 @@ export function handleUpdate(state, update, teacherIds = [], adminIds = []) {
   const access = { teacher, admin };
 
   if (callback) {
-    enqueue(state, 'answerCallbackQuery', { callback_query_id: callback.id });
+    enqueue(state, 'answerCallbackQuery', { callback_query_id: callback.id, text: '⬇️ Результат появится внизу чата' });
     const data = callback.data ?? '';
     const messageId = message.message_id;
     if (data === 'home') return showHome(state, user, access);
@@ -171,6 +189,22 @@ export function handleUpdate(state, update, teacherIds = [], adminIds = []) {
       user.learningMode = data.split(':')[1];
       send(state, id, user.learningMode === 'child' ? '🧒 Включена простая подача. Будем учиться небольшими шагами.' : '🧑 Включена подача для взрослых.');
       return showHome(state, user, access);
+    }
+    const sourceMatch = /^sources:([a-z0-9-]{1,40})$/u.exec(data);
+    if (sourceMatch) return showSources(state, user, sourceMatch[1], messageId);
+    const hintMatch = /^hint:([a-f0-9]{16}):(\d+)$/u.exec(data);
+    if (hintMatch) {
+      const attempt = state.attempts[user.activeAttempt];
+      if (!attempt || attempt.id !== hintMatch[1] || attempt.answers.length !== Number(hintMatch[2])) return send(state, id, 'Подсказка относится к прошлому вопросу. Продолжить: /practice');
+      attempt.hintsUsed ??= [];
+      if (!attempt.hintsUsed.includes(attempt.answers.length)) attempt.hintsUsed.push(attempt.answers.length);
+      return panel(state, user, `💡 Подсказка · ${attempt.lesson.title}\n\n${attempt.lesson.memory ?? lessonSections(attempt.lesson).rule[0]}\n\nСначала определи, о ком или о чём речь. Сравни форму с правилом. Это тренировочная подсказка: можно вернуться к вопросу и попробовать.`, { inline_keyboard: [[{ text: '✏️ Вернуться к вопросу', callback_data: `p:${attempt.lesson.id}` }]] });
+    }
+    const repeatMatch = /^repeat:([a-f0-9]{16})$/u.exec(data);
+    if (repeatMatch) {
+      const origin = state.attempts[repeatMatch[1]];
+      if (!origin || origin.studentId !== id || !origin.completedAt) return send(state, id, 'Повторение доступно только для твоей завершённой попытки.');
+      return startLesson(state, user, origin.lesson.id, undefined, origin);
     }
     const sectionMatch = /^s:([a-z0-9-]{1,40}):(rule|examples|traps):(\d+)$/u.exec(data);
     if (sectionMatch) return showSection(state, user, sectionMatch[1], sectionMatch[2], Number(sectionMatch[3]), messageId);
@@ -218,6 +252,14 @@ export function handleUpdate(state, update, teacherIds = [], adminIds = []) {
   const [rawCommand, argument] = text.split(/\s+/u);
   const command = rawCommand.split('@')[0].toLowerCase();
   if (command === '/menu') return showHome(state, user, access);
+  if (command === '/continue') {
+    if (user.activeAttempt) return ask(state, user);
+    const saved = user.reading;
+    const lesson = saved && findLesson(state, saved.lessonId);
+    if (!lesson) return showCatalog(state, user);
+    if (saved.version !== lesson.version) send(state, id, '📖 Репетитор обновил тему. Открываю раздел с начала.');
+    return showSection(state, user, saved.lessonId, saved.section, saved.version === lesson.version ? saved.page : 0);
+  }
   if (command === '/mode') return showMode(state, user);
   if (command === '/teacher') {
     if (!teacher) return send(state, id, 'Кабинет доступен репетитору.');
@@ -276,7 +318,7 @@ export function handleUpdate(state, update, teacherIds = [], adminIds = []) {
       return;
     }
     send(state, id, 'Добро пожаловать!\n/topics — каталог тем по уровням\n/topics A1 — темы уровня\n/lesson to-be — открыть конкретную тему\n/practice — практика по выбранной теме или продолжение\n/practice past-simple — практика по указанной теме\n/progress — результаты\n/cancel — отменить текущую попытку\n/join КОД — подключиться к репетитору и отправлять ему ответы на будущие задания\n/whoami — твой ID' +
-      '\n/homework — мои домашние задания\n/mode — выбрать подачу\n/menu — главное меню' + (teacher ? '\n\n👩‍🏫 /teacher — кабинет репетитора\n/editor — создать или исправить урок\n/invite — одноразовый код ученику (24 часа)\n/students — ученики и ID\n/assign ID_УЧЕНИКА ID_ТЕМЫ СРОК — назначить ДЗ\n/results — последние работы' : '') + (admin ? '\n/admin — управление ролями и полный доступ' : ''), { reply_markup: mainMenu(access) });
+      '\n/homework — мои домашние задания\n/continue — продолжить с места остановки\n/mode — выбрать подачу\n/menu — главное меню\n\n⬇️ Объяснения приходят новыми карточками внизу чата.' + (teacher ? '\n\n👩‍🏫 /teacher — кабинет репетитора\n/editor — создать или исправить урок\n/invite — одноразовый код ученику (24 часа)\n/students — ученики и ID\n/assign ID_УЧЕНИКА ID_ТЕМЫ СРОК — назначить ДЗ\n/results — последние работы' : '') + (admin ? '\n/admin — управление ролями и полный доступ' : ''), { reply_markup: mainMenu(access) });
   } else if (command === '/topics' || text === '📚 Темы') {
     showCatalog(state, user, command === '/topics' ? argument?.toUpperCase() : undefined);
   } else if (command === '/lesson') {
@@ -316,7 +358,7 @@ export function handleUpdate(state, update, teacherIds = [], adminIds = []) {
     }
   } else if (command === '/progress' || text === '📊 Мой прогресс') {
     const attempts = Object.values(state.attempts).filter((attempt) => attempt.studentId === id && attempt.completedAt);
-    send(state, id, attempts.length ? attempts.slice(-10).map((attempt) => `${attempt.lesson.title}: ${attempt.answers.filter((answer) => answer.correct).length}/${attempt.lesson.questions.length}`).join('\n') : 'Результатов пока нет. Начать: /practice');
+    send(state, id, attempts.length ? attempts.slice(-10).map((attempt) => `${attempt.reviewOf ? '🔁 Повторение ошибок' : '✏️ Практика'} · ${attempt.lesson.title}: ${attempt.answers.filter((answer) => answer.correct).length}/${attempt.lesson.questions.length}`).join('\n') : 'Результатов пока нет. Начать: /practice');
   } else if (text.startsWith('/')) {
     send(state, id, 'Неизвестная команда. /help');
   } else if (user.activeAttempt) {

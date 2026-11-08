@@ -3,6 +3,7 @@ export const publicCommands = [
   { command: 'start', description: 'Начать обучение' },
   { command: 'topics', description: 'Темы английского по уровням' },
   { command: 'practice', description: 'Начать или продолжить практику' },
+  { command: 'continue', description: '📍 Продолжить с места остановки' },
   { command: 'progress', description: 'Мои результаты' },
   { command: 'homework', description: 'Назначенные домашние задания' },
   { command: 'cancel', description: 'Отменить текущую попытку' },

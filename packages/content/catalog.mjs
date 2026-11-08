@@ -2,7 +2,9 @@ import { presentSimple } from './present-simple.mjs';
 import { a1Lessons } from './a1.mjs';
 import { a2Lessons } from './a2.mjs';
 import { normalizeAnswer } from '../domain/grading.mjs';
-import { enrichLesson } from './presentation.mjs';
+import { enrichLesson, lessonSections } from './presentation.mjs';
+import { deepenLesson } from './deeper-lessons.mjs';
+import { topicResources } from './resources.mjs';
 
 // Уровни задают ориентировочный учебный маршрут, а не сертификат CEFR.
 export const lessons = [
@@ -10,7 +12,7 @@ export const lessons = [
   { ...presentSimple, category: 'grammar', estimatedMinutes: 7 },
   ...a1Lessons.slice(6),
   ...a2Lessons,
-].map(enrichLesson);
+].map(enrichLesson).map((lesson) => ({ ...deepenLesson(lesson, lessonSections(lesson, { fallback: false })), resources: topicResources[lesson.id] ?? [] }));
 export const levels = [...new Set(lessons.map((item) => item.level))];
 export const getLesson = (id) => lessons.find((item) => item.id === id);
 

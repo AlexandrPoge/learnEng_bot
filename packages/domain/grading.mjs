@@ -14,6 +14,8 @@ export function buildReport(attempt, studentName) {
     `Ученик: ${studentName}`,
     `Тема: ${attempt.lesson.title} (${attempt.lesson.level}), версия ${attempt.lesson.version}`,
     `Результат: ${score}/${attempt.lesson.questions.length}`,
+    ...(attempt.reviewOf ? ['Режим: повторение ошибок (отдельная тренировочная попытка)'] : []),
+    ...(attempt.hintsUsed?.length ? [`Подсказки использованы: ${attempt.hintsUsed.length}`] : []),
     `Время между началом и отправкой: ${seconds} сек. (включая перерывы)`,
     ...(attempt.assignmentId ? [`Домашнее задание: ${attempt.late ? 'сдано после срока' : 'сдано вовремя'}\nСрок (UTC): ${attempt.deadline}`] : []),
     ...attempt.answers.map((answer, index) => {

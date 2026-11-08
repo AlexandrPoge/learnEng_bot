@@ -4,6 +4,7 @@ export function mainMenu({ teacher = false, admin = false } = {}) {
   return {
     keyboard: [
       ['📚 Темы', '▶️ Практика'], ['📝 Домашние задания', '📊 Мой прогресс'],
+      ['📍 Продолжить'],
       ['⚙️ Режим', '❓ Помощь'],
       ...(teacher ? [['👩‍🏫 Кабинет']] : []),
       ...(admin ? [['🛠 Админ']] : []),
@@ -16,6 +17,7 @@ export function topicButtons(lesson, page) {
   const rows = [
     [{ text: '📖 Правило', callback_data: `s:${lesson.id}:rule:0` }, { text: '💡 Примеры', callback_data: `s:${lesson.id}:examples:0` }],
     [{ text: '⚠️ Ловушки', callback_data: `s:${lesson.id}:traps:0` }, { text: '✏️ Практика', callback_data: `p:${lesson.id}` }],
+    [{ text: '🎬 Видео и источники', callback_data: `sources:${lesson.id}` }],
     [{ text: `📚 Темы ${lesson.level}`, callback_data: `l:${lesson.level}:${page ?? 0}` }, { text: '🏠 Меню', callback_data: 'home' }],
   ];
   return { inline_keyboard: rows };
@@ -31,11 +33,12 @@ export function sectionCard(lesson, section, page, child) {
   const labels = { rule: '📖 Правило', examples: '💡 Примеры', traps: '⚠️ Ловушки' };
   const intro = page === 0 && section === 'rule'
     ? [child ? lesson.childIntro : '', lesson.memory ? `🧠 Запомни: ${lesson.memory}` : ''].filter(Boolean).join('\n\n') : '';
-  return { text: `${lesson.icon ?? '📘'} ${lesson.title}\n${labels[section]} · ${page + 1}/${pages.length}\n\n${intro ? `${intro}\n\n` : ''}${pages[page]}`, pages: pages.length };
+  return { text: `📍 ${lesson.level} → ${lesson.icon ?? '📘'} ${lesson.title}\n${labels[section]} · шаг ${page + 1} из ${pages.length}\n\n${intro ? `${intro}\n\n` : ''}${pages[page]}\n\n👇 Продолжение и разделы — на кнопках под этой карточкой.`, pages: pages.length };
 }
 
 export const textActions = {
   '📚 Темы': '/topics', '▶️ Практика': '/practice', '📝 Домашние задания': '/homework', '📊 Мой прогресс': '/progress', '❓ Помощь': '/help',
+  '📍 Продолжить': '/continue',
   '🏠 Главное меню': '/menu', '⚙️ Режим': '/mode', '👩‍🏫 Кабинет': '/teacher', '🛠 Админ': '/admin',
   '✏️ Редактор': '/editor', '👥 Ученики': '/students', '📊 Работы учеников': '/results', '🔗 Пригласить ученика': '/invite',
 };

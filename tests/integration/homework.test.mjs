@@ -22,14 +22,15 @@ test('assigned homework is scoped, uses a frozen lesson and cannot be submitted 
   assert.equal(state.assignments, undefined);
   send(10, '/assign 20 present-simple 2099-11-20T18:00+03:00');
   const assignment = Object.values(state.assignments)[0];
+  const originalVersion = assignment.lesson.version;
   send(99, '/edit present-simple'); send(99, '/title Changed title'); send(99, '/publish');
-  assert.equal(assignment.lesson.version, 1);
+  assert.equal(assignment.lesson.version, originalVersion);
   click(21, `h:${assignment.id}`);
   assert.equal(state.users['21'].activeAttempt, null);
   click(20, `h:${assignment.id}`);
   const attempt = state.attempts[state.users['20'].activeAttempt];
   assert.equal(attempt.assignmentId, assignment.id);
-  assert.equal(attempt.lesson.version, 1);
+  assert.equal(attempt.lesson.version, originalVersion);
   assert.equal(attempt.teacherId, '10');
   for (const [index, question] of attempt.lesson.questions.entries()) {
     if (question.type === 'choice') click(20, `a:${attempt.id}:${index}:${question.options.indexOf(question.accepted[0])}`);
