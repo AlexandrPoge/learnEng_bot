@@ -3,6 +3,7 @@ import { readConfig } from './config.mjs';
 import { openStore } from './store.mjs';
 import { telegramClient } from './telegram.mjs';
 import { handleUpdate } from './handler.mjs';
+import { rolesFor } from '../../../packages/domain/roles.mjs';
 
 async function run() {
   const config = readConfig();
@@ -16,6 +17,13 @@ async function run() {
   async function flush() {
     while (store.state.outbox.length && !controller.signal.aborted) {
       const task = store.state.outbox[0];
+      // Отзыв доступа действует также на ещё не доставленные отчёты.
+      if ((task.requiredTeacher || task.payload.text?.startsWith('Новое выполненное задание')) && !rolesFor(store.state, config.teacherIds, config.adminIds).isTeacher(String(task.payload.chat_id))) {
+        const next = structuredClone(store.state);
+        next.outbox.shift();
+        await store.commit(next);
+        continue;
+      }
       try { await api(task.method, task.payload, controller.signal); }
       catch (error) {
         // Недоступный чат или истёкший callback не блокируют остальные отчёты.
@@ -42,7 +50,7 @@ async function run() {
         for (const update of updates) {
           if (controller.signal.aborted) break;
           const next = structuredClone(store.state);
-          handleUpdate(next, update, config.teacherIds);
+          handleUpdate(next, update, config.teacherIds, config.adminIds);
           await store.commit(next);
           await flush();
         }

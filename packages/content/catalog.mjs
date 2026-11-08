@@ -1,6 +1,7 @@
 import { presentSimple } from './present-simple.mjs';
 import { a1Lessons } from './a1.mjs';
 import { a2Lessons } from './a2.mjs';
+import { normalizeAnswer } from '../domain/grading.mjs';
 
 // Уровни задают ориентировочный учебный маршрут, а не сертификат CEFR.
 export const lessons = [
@@ -26,6 +27,7 @@ export function validateCatalog(items = lessons) {
       questionIds.add(question.id);
       if (!['choice', 'text'].includes(question.type) || !Array.isArray(question.accepted) || !question.accepted.length || question.accepted.some((answer) => typeof answer !== 'string' || !answer.trim())) error();
       if (question.type === 'choice' && (!Array.isArray(question.options) || question.options.length < 2 || new Set(question.options).size !== question.options.length || question.options.some((option) => typeof option !== 'string' || !option.trim()) || question.accepted.length !== 1 || !question.options.includes(question.accepted[0]))) error();
+      if (question.type === 'choice' && new Set(question.options.map(normalizeAnswer)).size !== question.options.length) error();
     }
   }
   return true;

@@ -15,6 +15,7 @@ export function buildReport(attempt, studentName) {
     `Тема: ${attempt.lesson.title} (${attempt.lesson.level}), версия ${attempt.lesson.version}`,
     `Результат: ${score}/${attempt.lesson.questions.length}`,
     `Время между началом и отправкой: ${seconds} сек. (включая перерывы)`,
+    ...(attempt.assignmentId ? [`Домашнее задание: ${attempt.late ? 'сдано после срока' : 'сдано вовремя'}\nСрок (UTC): ${attempt.deadline}`] : []),
     ...attempt.answers.map((answer, index) => {
       const question = attempt.lesson.questions[index];
       return `${index + 1}. ${question.prompt}\nОтвет: ${answer.value}\n${answer.correct ? '✅ Верно' : `❌ Правильно: ${question.accepted[0]}\n${question.explanation}`}`;

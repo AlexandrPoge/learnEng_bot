@@ -12,5 +12,7 @@ test('transport preserves rate limit delay and hides token in network errors', a
 
 test('teacher access configuration rejects usernames and invalid IDs', () => {
   assert.throws(() => readConfig({ TELEGRAM_BOT_TOKEN: '123:abc', TEACHER_IDS: '@teacher' }));
+  assert.throws(() => readConfig({ TELEGRAM_BOT_TOKEN: '123:abc', ADMIN_IDS: '@admin' }));
+  assert.deepEqual(readConfig({ TELEGRAM_BOT_TOKEN: '123:abc', ADMIN_IDS: '99' }).adminIds, ['99']);
   assert.deepEqual(readConfig({ TELEGRAM_BOT_TOKEN: '123:abc', TEACHER_IDS: '12, 34' }).teacherIds, ['12', '34']);
 });

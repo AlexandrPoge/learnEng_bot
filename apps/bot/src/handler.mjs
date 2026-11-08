@@ -1,21 +1,24 @@
 import { randomUUID, randomBytes } from 'node:crypto';
-import { lessons, levels, getLesson } from '../../../packages/content/catalog.mjs';
 import { gradeAnswer, buildReport } from '../../../packages/domain/grading.mjs';
+import { rolesFor } from '../../../packages/domain/roles.mjs';
+import { availableLessons, findLesson, handleEditor } from './editor.mjs';
+import { parseDeadline } from '../../../packages/domain/deadline.mjs';
 
 const menu = {
-  keyboard: [['📚 Темы', '▶️ Практика'], ['📊 Мой прогресс', '❓ Помощь']],
+  keyboard: [['📚 Темы', '▶️ Практика'], ['📝 Домашние задания'], ['📊 Мой прогресс', '❓ Помощь']],
   resize_keyboard: true,
 };
 
-function enqueue(state, method, payload) {
-  state.outbox.push({ id: randomUUID(), method, payload });
+function enqueue(state, method, payload, requiredTeacher = false) {
+  state.outbox.push({ id: randomUUID(), method, payload, requiredTeacher });
 }
 
 // Telegram ограничивает текст сообщения. Отчёты делим, сохраняя все ответы.
 function send(state, chatId, text, extra = {}) {
+  const { requiredTeacher = false, ...telegramExtra } = extra;
   const characters = [...text];
   while (characters.length) {
-    enqueue(state, 'sendMessage', { chat_id: chatId, text: characters.splice(0, 1900).join(''), ...extra });
+    enqueue(state, 'sendMessage', { chat_id: chatId, text: characters.splice(0, 1900).join(''), ...telegramExtra }, requiredTeacher);
   }
 }
 
@@ -32,6 +35,8 @@ function ask(state, user) {
 }
 
 function showCatalog(state, user, level, page = 0) {
+  const lessons = availableLessons(state);
+  const levels = [...new Set(lessons.map((item) => item.level))].sort();
   if (!level) {
     send(state, user.id, `Библиотека: ${lessons.length} тем. Выбери уровень.\nУровни — ориентир для обучения.\n✅ — тема уже пройдена, это не оценка владения языком.`, {
       reply_markup: { inline_keyboard: levels.map((value) => [{ text: `${value} · ${lessons.filter((item) => item.level === value).length} тем`, callback_data: `l:${value}:0` }]) },
@@ -55,7 +60,7 @@ function showCatalog(state, user, level, page = 0) {
 }
 
 function showLesson(state, user, id) {
-  const lesson = getLesson(id);
+  const lesson = findLesson(state, id);
   if (!lesson) return send(state, user.id, 'Тема не найдена. Выбери тему: /topics');
   user.selectedLesson = id;
   send(state, user.id, `${lesson.title} · ${lesson.level} · около ${lesson.estimatedMinutes} мин\n\n${lesson.theory}`, {
@@ -66,8 +71,9 @@ function showLesson(state, user, id) {
   });
 }
 
-function startLesson(state, user, lessonId) {
-  const selected = getLesson(lessonId ?? user.selectedLesson ?? 'present-simple');
+function startLesson(state, user, lessonId, assignment) {
+  if (state.editors?.[user.id]?.step) return send(state, user.id, 'Сначала закончи вопрос в редакторе или закрой черновик: /discard');
+  const selected = assignment?.lesson ?? findLesson(state, lessonId ?? user.selectedLesson ?? 'present-simple');
   if (!selected) return send(state, user.id, 'Тема не найдена. Выбери тему: /topics');
   if (user.activeAttempt) {
     send(state, user.id, `Продолжим начатое задание: ${state.attempts[user.activeAttempt].lesson.title}. Для смены темы отмени попытку: /cancel`);
@@ -79,8 +85,10 @@ function startLesson(state, user, lessonId) {
   const id = randomBytes(8).toString('hex');
   state.attempts[id] = {
     id, studentId: user.id, teacherId: user.teacherId ?? null,
+    assignmentId: assignment?.id ?? null,
     lesson, startedAt: new Date().toISOString(), completedAt: null, answers: [],
   };
+  if (assignment) state.attempts[id].teacherId = assignment.teacherId;
   user.activeAttempt = id;
   send(state, user.id, `${lesson.title} · ${lesson.level}\n\n${lesson.theory}`);
   ask(state, user);
@@ -94,13 +102,20 @@ function acceptAnswer(state, user, value) {
   send(state, user.id, `${correct ? '✅ Верно!' : `❌ Правильно: ${question.accepted[0]}`}\n${question.explanation}`);
   if (attempt.answers.length < attempt.lesson.questions.length) return ask(state, user);
   attempt.completedAt = new Date().toISOString();
+  const assignment = state.assignments?.[attempt.assignmentId];
+  if (assignment) {
+    assignment.completedAt = attempt.completedAt;
+    assignment.attemptId = attempt.id;
+    attempt.deadline = assignment.deadline;
+    attempt.late = Date.parse(attempt.completedAt) > Date.parse(assignment.deadline);
+  }
   user.activeAttempt = null;
   const report = buildReport(attempt, user.name);
   send(state, user.id, `Практика завершена!\n\n${report}`, { reply_markup: menu });
-  if (attempt.teacherId) send(state, attempt.teacherId, `Новое выполненное задание\n\n${report}`);
+  if (attempt.teacherId) send(state, attempt.teacherId, `Новое выполненное задание\n\n${report}`, { requiredTeacher: true });
 }
 
-export function handleUpdate(state, update, teacherIds = []) {
+export function handleUpdate(state, update, teacherIds = [], adminIds = []) {
   if (!Number.isSafeInteger(update.update_id) || update.update_id < state.offset) return;
   state.offset = update.update_id + 1;
   const callback = update.callback_query;
@@ -111,12 +126,20 @@ export function handleUpdate(state, update, teacherIds = []) {
   const id = String(from.id);
   const user = state.users[id] ??= { id, name: from.first_name || 'Ученик', activeAttempt: null };
   user.name = (from.first_name || 'Ученик').slice(0, 80);
-  const teacher = teacherIds.includes(id);
+  const roles = rolesFor(state, teacherIds, adminIds);
+  const teacher = roles.isTeacher(id);
+  const admin = roles.isAdmin(id);
 
   if (callback) {
     enqueue(state, 'answerCallbackQuery', { callback_query_id: callback.id });
     const data = callback.data ?? '';
     if (data === 'levels') return showCatalog(state, user);
+    const homeworkMatch = /^h:([a-f0-9]{16})$/u.exec(data);
+    if (homeworkMatch) {
+      const assignment = state.assignments?.[homeworkMatch[1]];
+      if (!assignment || assignment.studentId !== id || assignment.completedAt) return send(state, id, 'Это задание недоступно или уже сдано. /homework');
+      return startLesson(state, user, assignment.lesson.id, assignment);
+    }
     const catalogMatch = /^l:(A1|A2|B1|B2|C1|C2):(\d+)$/u.exec(data);
     if (catalogMatch) return showCatalog(state, user, catalogMatch[1], Number(catalogMatch[2]));
     const topicMatch = /^(t|p):([a-z0-9-]{1,40})$/u.exec(data);
@@ -137,10 +160,51 @@ export function handleUpdate(state, update, teacherIds = []) {
   if (!text) { send(state, id, 'Сейчас принимаю текстовые ответы и кнопки. /help'); return; }
   const [rawCommand, argument] = text.split(/\s+/u);
   const command = rawCommand.split('@')[0].toLowerCase();
-  if (command === '/whoami') return send(state, id, `Твой Telegram ID: ${id}\nРоль: ${teacher ? 'репетитор' : 'ученик'}`);
+  if (['/admin', '/add_teacher', '/remove_teacher'].includes(command)) {
+    if (!admin) return send(state, id, 'Команда доступна администратору.');
+    if (command === '/admin') return send(state, id, `Права администратора: все материалы, все ученики и результаты, роли, история и восстановление.\n/add_teacher ID\n/remove_teacher ID\n/editor — редактор уроков\n/students — все ученики\n/results — последние работы\nРепетиторы: ${roles.teacherIds.join(', ') || 'нет'}`);
+    if (!/^[1-9]\d*$/u.test(argument ?? '')) return send(state, id, 'Укажи числовой Telegram ID.');
+    if (roles.isAdmin(argument)) return send(state, id, 'Права администратора задаются в ADMIN_IDS.');
+    state.teacherIds ??= [];
+    state.revokedTeacherIds ??= [];
+    if (command === '/add_teacher') {
+      state.teacherIds = [...new Set([...state.teacherIds, argument])];
+      state.revokedTeacherIds = state.revokedTeacherIds.filter((value) => value !== argument);
+      send(state, id, `Права репетитора выданы: ${argument}.`);
+    } else {
+      state.teacherIds = state.teacherIds.filter((value) => value !== argument);
+      state.revokedTeacherIds = [...new Set([...state.revokedTeacherIds, argument])];
+      delete state.editors?.[argument];
+      send(state, id, `Права репетитора сняты: ${argument}.`);
+    }
+    return;
+  }
+  if (handleEditor(state, user, text, { teacher, admin, send: (value) => send(state, id, value) })) return;
+  if (command === '/assign') {
+    if (!teacher) return send(state, id, 'Назначение доступно репетитору или администратору.');
+    const [, studentId, lessonId, due] = text.split(/\s+/u);
+    const student = state.users[studentId];
+    const lesson = findLesson(state, lessonId);
+    const deadline = parseDeadline(due);
+    if (!student || (!admin && student.teacherId !== id)) return send(state, id, 'Ученик не найден или не подключён к тебе. /students');
+    if (!lesson || !deadline || Date.parse(deadline) <= Date.now()) return send(state, id, 'Формат: /assign ID_УЧЕНИКА ID_ТЕМЫ ГГГГ-ММ-ДДTЧЧ:ММ+03:00\nНужна существующая тема и будущий срок с часовым поясом.');
+    state.assignments ??= {};
+    const assignmentId = randomBytes(8).toString('hex');
+    state.assignments[assignmentId] = { id: assignmentId, studentId, teacherId: id, lesson: structuredClone(lesson), deadline, createdAt: new Date().toISOString(), completedAt: null };
+    send(state, id, `Задание назначено: ${student.name} · ${lesson.title}\nСрок: ${due}`);
+    send(state, studentId, `Новое домашнее задание: ${lesson.title}\nСрок: ${due}\nПрактика с объяснениями после каждого ответа. Результат получит репетитор.`, { reply_markup: { inline_keyboard: [[{ text: 'Начать задание', callback_data: `h:${assignmentId}` }]] } });
+    return;
+  }
+  if (command === '/homework' || text === '📝 Домашние задания') {
+    const assignments = Object.values(state.assignments ?? {}).filter((item) => item.studentId === id);
+    if (!assignments.length) return send(state, id, 'Домашних заданий пока нет. Можно потренироваться: /topics');
+    for (const item of assignments.slice(-10)) send(state, id, `${item.lesson.title}\nСрок (UTC): ${item.deadline}\n${item.completedAt ? '✅ Сдано' : Date.now() > Date.parse(item.deadline) ? 'Срок прошёл, ещё можно сдать' : 'Ожидает выполнения'}`, item.completedAt ? {} : { reply_markup: { inline_keyboard: [[{ text: 'Открыть', callback_data: `h:${item.id}` }]] } });
+    return;
+  }
+  if (command === '/whoami') return send(state, id, `Твой Telegram ID: ${id}\nРоль: ${admin ? 'администратор' : teacher ? 'репетитор' : 'ученик'}`);
   if (command === '/start' || command === '/help' || text === '❓ Помощь') {
     send(state, id, 'Добро пожаловать!\n/topics — каталог тем по уровням\n/topics A1 — темы уровня\n/lesson to-be — открыть конкретную тему\n/practice — практика по выбранной теме или продолжение\n/practice past-simple — практика по указанной теме\n/progress — результаты\n/cancel — отменить текущую попытку\n/join КОД — подключиться к репетитору и отправлять ему ответы на будущие задания\n/whoami — твой ID' +
-      (teacher ? '\n\nРепетитору:\n/invite — одноразовый код ученику (24 часа)\n/students — мои ученики\n/results — последние работы моих учеников' : ''), { reply_markup: menu });
+      '\n/homework — мои домашние задания' + (teacher ? '\n\nРепетитору:\n/editor — создать или исправить урок\n/invite — одноразовый код ученику (24 часа)\n/students — ученики и ID\n/assign ID_УЧЕНИКА ID_ТЕМЫ СРОК — назначить ДЗ\n/results — последние работы' : '') + (admin ? '\n/admin — управление ролями и полный доступ' : ''), { reply_markup: menu });
   } else if (command === '/topics' || text === '📚 Темы') {
     showCatalog(state, user, command === '/topics' ? argument?.toUpperCase() : undefined);
   } else if (command === '/lesson') {
@@ -161,7 +225,7 @@ export function handleUpdate(state, update, teacherIds = []) {
     send(state, id, `Одноразовый код на 24 часа. Передай ученику команду:\n/join ${code}\nПосле подключения ты получишь его ответы на будущие задания.`);
   } else if (command === '/join') {
     const invite = state.invites[argument];
-    if (!invite || invite.expiresAt < Date.now() || !teacherIds.includes(invite.teacherId) || invite.teacherId === id) {
+    if (!invite || invite.expiresAt < Date.now() || !roles.isTeacher(invite.teacherId) || invite.teacherId === id) {
       return send(state, id, 'Код недействителен. Попроси новый у репетитора.');
     }
     if (user.teacherId) return send(state, id, 'Ты уже подключён к репетитору.');
@@ -171,10 +235,10 @@ export function handleUpdate(state, update, teacherIds = []) {
     send(state, user.teacherId, `Подключился ученик: ${user.name}`);
   } else if (command === '/students' || command === '/results') {
     if (!teacher) return send(state, id, 'Команда доступна репетитору.');
-    const students = Object.values(state.users).filter((student) => student.teacherId === id);
-    if (command === '/students') send(state, id, students.map((student) => student.name).join('\n') || 'Учеников пока нет. Создай /invite');
+    const students = Object.values(state.users).filter((student) => admin || student.teacherId === id);
+    if (command === '/students') send(state, id, students.map((student) => `${student.name} · ${student.id}`).join('\n') || 'Учеников пока нет. Создай /invite');
     else {
-      const attempts = Object.values(state.attempts).filter((attempt) => attempt.teacherId === id && attempt.completedAt).slice(-5);
+      const attempts = Object.values(state.attempts).filter((attempt) => (admin || attempt.teacherId === id) && attempt.completedAt).slice(-5);
       if (!attempts.length) send(state, id, 'Выполненных заданий пока нет.');
       for (const attempt of attempts) send(state, id, buildReport(attempt, state.users[attempt.studentId].name));
     }

@@ -6,6 +6,9 @@
   "engines": { "node": ">=20.12" },
   "scripts": {
     "start": "node --env-file=.env apps/bot/src/main.mjs",
+    "bot:setup": "node --env-file=.env scripts/setup-bot.mjs",
+    "demo": "node scripts/demo.mjs",
+    "demo:send": "node --env-file=.env scripts/demo.mjs --send-admin",
     "test": "node --test tests/unit/*.test.mjs tests/integration/*.test.mjs",
     "check": "node scripts/check.mjs"
   }
