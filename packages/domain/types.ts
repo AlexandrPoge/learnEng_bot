@@ -1,5 +1,6 @@
 export type Level = 'A1' | 'A2' | 'B1' | 'B2' | 'C1' | 'C2';
 export type Category = 'foundation' | 'grammar' | 'vocabulary' | 'situations';
+export type GrammarStrand = 'tenses' | 'nouns' | 'modifiers' | 'verbs' | 'sentences';
 export type Section = 'rule' | 'examples' | 'traps';
 interface QuestionBase { id: string; prompt: string; accepted: string[]; explanation: string }
 export interface ChoiceQuestion extends QuestionBase { type: 'choice'; options: string[] }
@@ -12,6 +13,7 @@ export interface Lesson {
   estimatedMinutes: number; theory: string; questions: Question[];
   icon?: string; goal?: string; memory?: string; childIntro?: string; resources?: Resource[]; rulePhoto?: string;
   schoolGrades?: number[];
+  strand?: GrammarStrand;
 }
 export interface Answer { questionId: string; value: string; correct: boolean }
 export interface Attempt {
@@ -26,7 +28,7 @@ export interface User {
   learningMode?: 'child' | 'adult'; selectedLesson?: string; searching?: boolean;
   reading?: { lessonId: string; section: Section; page: number; version: number };
   catalog?: { level: Level; page: number; category: Category | null };
-  schoolCatalog?: { grade: number; page: number; category: Category | null };
+  schoolCatalog?: { grade: number; page: number; category: Category | null; strand?: GrammarStrand | 'all' };
   resultNotifications?: 'compact' | 'off';
   classContext?: string;
   workspace?: { kind: 'class'; nonce: string; name?: string; classId?: string } | {
@@ -35,7 +37,7 @@ export interface User {
     step: 'target' | 'deadline' | 'mode' | 'confirm';
   };
 }
-export interface Classroom { id: string; name: string; level: 'A1' | 'A2'; ownerId: string; studentIds: string[]; lessonIds: string[]; createdAt: string }
+export interface Classroom { id: string; name: string; level: Level; ownerId: string; studentIds: string[]; lessonIds: string[]; createdAt: string }
 export interface HomeworkTemplate { id: string; ownerId: string; lesson: Lesson; updatedAt: string }
 export interface Assignment { id: string; studentId: string; teacherId: string; lesson: Lesson; deadline: string; createdAt: string; completedAt: string | null; attemptId?: string; classId?: string; batchId?: string; mode?: 'practice' | 'test' }
 export interface EditorDraft {

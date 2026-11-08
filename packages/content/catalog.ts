@@ -8,6 +8,8 @@ import { topicResources, courseResources } from './resources.js';
 import { courseA1 } from './course-a1.js';
 import { courseA2 } from './course-a2.js';
 import { calendarLife } from './course-calendar-life.js';
+import { schoolJunior } from './school-junior.js';
+import { schoolSenior } from './school-senior.js';
 import type { Category, Lesson } from '../domain/types.js';
 
 // Уровни задают ориентировочный учебный маршрут, а не сертификат CEFR.
@@ -18,6 +20,7 @@ export const lessons: Lesson[] = [
   ...a2Lessons,
 ].map(enrichLesson).map((lesson) => ({ ...deepenLesson(lesson, lessonSections(lesson, { fallback: false })), resources: topicResources[lesson.id] ?? [] }));
 lessons.push(...[...courseA1, ...courseA2, ...calendarLife].map((lesson) => ({ ...lesson, resources: courseResources(lesson) })));
+lessons.push(...schoolJunior, ...schoolSenior);
 const categoryOrder: Record<Category, number> = { foundation: 0, grammar: 1, vocabulary: 2, situations: 3 };
 lessons.sort((a, b) => a.level.localeCompare(b.level) || (categoryOrder[a.category] ?? 1) - (categoryOrder[b.category] ?? 1));
 export const levels = [...new Set(lessons.map((item) => item.level))];
@@ -29,6 +32,7 @@ export function validateCatalog(items = lessons) {
     if (!/^[a-z0-9-]{1,40}$/u.test(item.id) || ids.has(item.id)) throw new Error(`Некорректный или повторный ID темы: ${item.id}`);
     ids.add(item.id);
     if (item.schoolGrades !== undefined && (!Array.isArray(item.schoolGrades) || item.schoolGrades.some(g => !Number.isInteger(g) || g < 1 || g > 11) || new Set(item.schoolGrades).size !== item.schoolGrades.length)) throw new Error(`Некорректные школьные классы: ${item.id}`);
+    if (item.strand !== undefined && !['tenses', 'nouns', 'modifiers', 'verbs', 'sentences'].includes(item.strand)) throw new Error(`Некорректный блок грамматики: ${item.id}`);
     if (!['A1', 'A2', 'B1', 'B2', 'C1', 'C2'].includes(item.level) || !item.title?.trim() || !item.theory?.trim() || !Number.isInteger(item.version) || item.version < 1) throw new Error(`Некорректная тема: ${item.id}`);
     if (!item.questions?.length) throw new Error(`Нет упражнений: ${item.id}`);
     const questionIds = new Set();

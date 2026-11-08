@@ -12,9 +12,9 @@ function harness() {
   return { state, text, click, last: () => state.outbox.at(-1) };
 }
 
-test('all 66 topics have icons, simple explanations, and separate short sections', () => {
-  assert.equal(lessons.length, 66);
-  assert.deepEqual([...new Set(lessons.map((item) => item.level))], ['A1', 'A2']);
+test('all 106 topics have icons, simple explanations, and separate short sections', () => {
+  assert.equal(lessons.length, 106);
+  assert.deepEqual([...new Set(lessons.map((item) => item.level))], ['A1', 'A2', 'B1', 'B2']);
   for (const lesson of lessons) {
     assert.ok(lesson.icon && lesson.goal && lesson.memory && lesson.childIntro, lesson.id);
     const sections = lessonSections(lesson);

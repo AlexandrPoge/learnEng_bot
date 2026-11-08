@@ -9,7 +9,7 @@ try {
   const config = readConfig();
   const api = telegramClient(config.token);
   for (const id of config.adminIds) {
-    await api('sendMessage', { chat_id: id, text: '📚 Обновил учебник\n\nТеперь выбирай «По школьным классам» или «По уровням A1–A2». Группу учеников создавать не нужно.\n\n📊 Результаты учеников сохраняются автоматически. Репетитору приходит только краткое уведомление с кнопкой открытия работы. В /notifications можно включить тихий режим.', reply_markup: mainMenu({ teacher: true, admin: true }) });
+    await api('sendMessage', { chat_id: id, text: '📚 Учебник расширен\n\n106 тем и 530 вопросов: A1, A2, B1 и B2. Добавлены 40 тем по каталогу Фоксфорда с собственными объяснениями и заданиями.\n\n🏫 Выбери школьный класс → раздел → блок грамматики → тему. В старших классах появились сложные времена, пассив, косвенная речь и условные предложения.\n\nВсе новые темы можно назначать как ДЗ. Хостинг пока локальный: компьютер должен оставаться включённым.', reply_markup: mainMenu({ teacher: true, admin: true }) });
     const state = emptyState();
     handleUpdate(state, { update_id: 0, message: { from: { id: Number(id) }, chat: { id: Number(id), type: 'private' }, text: '/textbook' } }, config.teacherIds, config.adminIds);
     for (const task of state.outbox) if (task.method === 'sendMessage') {

@@ -121,7 +121,7 @@ test('catalog navigation, topic selection and practice resuming preserve the act
   assert.notEqual(state.attempts[secondId].lesson, getLesson('past-simple'));
   action(20, 'l:A1:999');
   assert.match(state.outbox.at(-1).payload.text, /Страница не найдена/u);
-  text(20, '/topics B2');
+  text(20, '/topics C2');
   assert.match(state.outbox.at(-1).payload.text, /пока не добавлен/u);
 });
 

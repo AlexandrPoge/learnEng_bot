@@ -12,8 +12,8 @@ function harness() {
   return { state, text, click, last: () => state.outbox.at(-1).payload };
 }
 
-test('every A1-A2 topic has examples and labelled official resources or collections', () => {
-  const allowed = ['learnenglish.britishcouncil.org', 'learnenglishkids.britishcouncil.org', 'learnenglishteens.britishcouncil.org'];
+test('every topic has examples and labelled publisher resources or collections', () => {
+  const allowed = ['learnenglish.britishcouncil.org', 'learnenglishkids.britishcouncil.org', 'learnenglishteens.britishcouncil.org', 'foxford.ru'];
   for (const lesson of lessons) {
     const sections = lessonSections(lesson);
     assert.ok(sections.rule.length >= 4, lesson.id);

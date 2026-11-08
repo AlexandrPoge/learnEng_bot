@@ -21,9 +21,13 @@ export const publicCommands: BotCommand[] = [
 
 export async function configureProfile(api: TelegramApi, adminIds: string[]) {
   await api('setMyName', { name: 'English · Уроки и практика' });
-  await api('setMyDescription', { description: 'Английский для детей и взрослых: темы A1–A2, понятные объяснения, примеры, ловушки и практика. Репетитор может создавать уроки и получать ответы учеников. Нажми «Начать», затем выбери тему.' });
-  await api('setMyShortDescription', { short_description: 'Английский A1–A2: темы, упражнения и обратная связь. Практика самостоятельно или с репетитором.' });
+  await configureDescriptions(api);
   await configureCommands(api, adminIds);
+}
+
+export async function configureDescriptions(api: TelegramApi) {
+  await api('setMyDescription', { description: 'Английский A1–B2 для детей и взрослых: 106 тем, школьные подборки, понятные правила, картинки, примеры и практика. Репетитор создаёт свои ДЗ и видит ответы, результат и время. Нажми «Начать» → «Учебник».' });
+  await api('setMyShortDescription', { short_description: 'Английский A1–B2: учебник по классам и уровням, упражнения и свои ДЗ с репетитором.' });
 }
 
 export async function configureCommands(api: TelegramApi, adminIds: string[]) {

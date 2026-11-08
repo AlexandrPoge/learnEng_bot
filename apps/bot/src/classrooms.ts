@@ -2,7 +2,7 @@ import { randomBytes } from 'node:crypto';
 import { availableLessons, findLesson } from './editor.js';
 import { parseDeadline } from '../../../packages/domain/deadline.js';
 import { buildReport } from '../../../packages/domain/grading.js';
-import type { Assignment, BotState, Classroom, InlineButton, Lesson, ReplyMarkup, TelegramPayload, User } from '../../../packages/domain/types.js';
+import type { Assignment, BotState, Classroom, InlineButton, Lesson, Level, ReplyMarkup, TelegramPayload, User } from '../../../packages/domain/types.js';
 
 interface Context {
   teacher: boolean; admin: boolean; isTeacher(id: string): boolean;
@@ -13,6 +13,7 @@ interface Context {
   topic(id: string): void;
 }
 const button = (text: string, callback_data: string): InlineButton => ({ text, callback_data });
+const levelButtons = (nonce: string) => ({ inline_keyboard: [['A1', 'A2'], ['B1', 'B2']].map(row => row.map(l => button(l, `class:level:${nonce}:${l}`))) });
 const key = () => randomBytes(4).toString('hex');
 const dueLabel = (date: string) => `${new Date(date).toLocaleString('ru-RU', { timeZone: 'Europe/Minsk', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })} (UTC+3)`;
 const manage = (c: Classroom, user: User, ctx: Context) => ctx.teacher && (ctx.admin || c.ownerId === user.id);
@@ -122,7 +123,7 @@ export function handleClassrooms(state: BotState, user: User, input: { text?: st
         c.name = text; delete user.workspace; showClass(state, user, c, ctx); return true;
       }
       draft.name = text;
-      ctx.panel('🌱 Выбери уровень класса.\n\nНомер школьного класса и языковой уровень — разные вещи.', { inline_keyboard: [[button('A1 · начинаем', `class:level:${draft.nonce}:A1`), button('A2 · продолжаем', `class:level:${draft.nonce}:A2`)]] });
+      ctx.panel('🌱 Выбери уровень группы.\n\nНомер школьного класса и языковой уровень — разные вещи.', levelButtons(draft.nonce));
       return true;
     }
     if (draft.kind === 'assign' && draft.step === 'deadline') {
@@ -150,14 +151,14 @@ export function handleClassrooms(state: BotState, user: User, input: { text?: st
       ctx.send('🏫 Новый класс\n\nОтправь название, например «2 класс», «Подростки A2» или «Взрослые».\n\nОтмена: /cancel_setup'); return true;
     }
     if (action === 'level') {
-      if (!ctx.teacher || draft?.kind !== 'class' || draft.nonce !== id || !draft.name || !['A1', 'A2'].includes(detail)) { ctx.send('Этот шаг уже закрыт. /classes'); return true; }
+      if (!ctx.teacher || draft?.kind !== 'class' || draft.nonce !== id || !draft.name || !['A1', 'A2', 'B1', 'B2'].includes(detail)) { ctx.send('Этот шаг уже закрыт. /classes'); return true; }
       if (draft.classId) {
         const c = state.classes?.[draft.classId];
         if (!c || !manage(c, user, ctx)) { delete user.workspace; ctx.send('Класс недоступен.'); return true; }
-        c.level = detail as 'A1' | 'A2'; delete user.workspace;
+        c.level = detail as Level; delete user.workspace;
         ctx.send('Уровень изменён. Ранее выбранные темы и ДЗ сохранены.'); showClass(state, user, c, ctx); return true;
       }
-      const c: Classroom = { id: key(), name: draft.name, level: detail as 'A1' | 'A2', ownerId: user.id, studentIds: [], lessonIds: [], createdAt: new Date().toISOString() };
+      const c: Classroom = { id: key(), name: draft.name, level: detail as Level, ownerId: user.id, studentIds: [], lessonIds: [], createdAt: new Date().toISOString() };
       (state.classes ??= {})[c.id] = c;
       delete user.workspace; showClass(state, user, c, ctx); return true;
     }
@@ -203,7 +204,7 @@ export function handleClassrooms(state: BotState, user: User, input: { text?: st
       if (user.activeAttempt || state.editors?.[user.id] || user.workspace) { ctx.send('Сначала закрой настройку /cancel_setup, черновик /discard или практику /cancel.'); return true; }
       user.workspace = { kind: 'class', nonce: key(), classId: c.id, ...(action === 'change-level' ? { name: c.name } : {}) };
       if (action === 'rename') ctx.send('✏️ Отправь новое название класса (до 70 символов). Отмена: /cancel_setup');
-      else ctx.panel('🌱 Выбери уровень. Ранее выбранные темы и назначенные ДЗ сохранятся.', { inline_keyboard: [[button('A1', `class:level:${user.workspace.nonce}:A1`), button('A2', `class:level:${user.workspace.nonce}:A2`)]] });
+      else ctx.panel('🌱 Выбери уровень. Ранее выбранные темы и назначенные ДЗ сохранятся.', levelButtons(user.workspace.nonce));
       return true;
     }
     if (action === 'invite') {

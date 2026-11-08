@@ -19,14 +19,14 @@ function harness() {
   return { state, send, click, last, press };
 }
 
-test('school selections contain real published topics, cover the library and label senior revision', () => {
+test('school selections contain real published topics, cover the library and include senior B1-B2 material', () => {
   const all = new Set<string>();
   for (const year of schoolYears) {
     assert.equal(new Set(year.lessonIds).size, year.lessonIds.length);
     assert.ok(year.lessonIds.every(id => lessons.some(l => l.id === id)));
     const items = schoolLessons(year.grade, lessons); assert.ok(items.length);
     items.forEach(l => all.add(l.id));
-    if (year.grade >= 8) assert.equal(year.revision, true);
+    if (year.grade >= 8) assert.ok(items.some(l => l.level === 'B1' || l.level === 'B2'));
   }
   assert.equal(all.size, lessons.length);
   const override = { ...lessons[0], schoolGrades: [7] };
@@ -37,7 +37,7 @@ test('school selections contain real published topics, cover the library and lab
 
 test('public textbook opens both routes without creating or joining a teacher group', () => {
   const h = harness(); h.send(20, '/start'); h.send(20, '📚 Учебник');
-  h.press('По школьным классам'); h.press('3 класс'); h.press('Грамматика'); h.press('Present Simple');
+  h.press('По школьным классам'); h.press('3 класс'); h.press('Грамматика'); h.press('Времена'); h.press('Present Simple');
   assert.match(h.last().text!, /Учебник → 3 класс/u);
   h.press('Правило'); assert.match(h.last().text!, /Учебник → 3 класс/u);
   assert.equal(h.state.classes, undefined); assert.equal(h.state.invites && Object.keys(h.state.invites).length, 0);
@@ -57,7 +57,7 @@ test('school reading retains the exact page and section, with honest revision la
   h.press('Правило'); h.send(20, '/continue'); h.press('Темы класса');
   assert.deepEqual(h.state.users['20'].schoolCatalog, saved);
   assert.match(h.last().text!, /Страница 2/u);
-  h.send(20, '/school 11'); assert.match(h.last().text!, /Повторение A1–A2.*неполный/u);
+  h.send(20, '/school 11'); assert.match(h.last().text!, /B1–B2/u);
   h.click(20, 'school:0'); assert.match(h.last().text!, /не найден/u);
   h.click(20, 'school:4:all:999'); assert.match(h.last().text!, /не доступна/u);
   h.send(20, '/search family'); h.press('Семья'); assert.equal(h.state.users['20'].schoolCatalog, undefined);

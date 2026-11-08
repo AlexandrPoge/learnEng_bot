@@ -9,8 +9,8 @@ import { splitMessage, richText, readable } from './format.js';
 import { handleClassrooms } from './classrooms.js';
 import { ruleImagePages } from './rule-images.js';
 import { recordActivity, timeSummary } from '../../../packages/domain/timing.js';
-import { schoolYears, schoolLessons } from '../../../packages/content/school.js';
-import type { BotState, User, Attempt, Assignment, Access, Category, Level, Section, RichText, TelegramPayload, TelegramResults, TelegramUpdate, ReplyMarkup } from '../../../packages/domain/types.js';
+import { schoolYears, schoolLessons, grammarStrands, lessonStrand } from '../../../packages/content/school.js';
+import type { BotState, User, Attempt, Assignment, Access, Category, GrammarStrand, Level, Section, RichText, TelegramPayload, TelegramResults, TelegramUpdate, ReplyMarkup } from '../../../packages/domain/types.js';
 
 function enqueue(state: BotState, method: keyof TelegramResults, payload: TelegramPayload, requiredTeacher = false) {
   state.outbox.push({ id: randomUUID(), method, payload, requiredTeacher });
@@ -59,14 +59,14 @@ function showMode(state: BotState, user: User, messageId?: number) {
 
 function showHome(state: BotState, user: User, access: Access) {
   delete user.workspace;
-  send(state, user.id, `🌟 Английский шаг за шагом\n\n📚 Открой «Учебник».\n🏫 Выбери школьный класс или 🌱 уровень A1–A2.\n📖 Найди тему, прочитай правило и примеры.\n✏️ Закрепи её упражнениями.\n\n${user.learningMode === 'adult' ? '🧑 Подача для взрослых' : '🧒 Простая подача для детей'}\n👇 Всё нужное — на кнопках внизу.`, { reply_markup: mainMenu(access) });
+  send(state, user.id, `🌟 Английский шаг за шагом\n\n📚 Открой «Учебник».\n🏫 Выбери школьный класс или 🌱 уровень A1–B2.\n📖 Найди тему, прочитай правило и примеры.\n✏️ Закрепи её упражнениями.\n\n${user.learningMode === 'adult' ? '🧑 Подача для взрослых' : '🧒 Простая подача для детей'}\n👇 Всё нужное — на кнопках внизу.`, { reply_markup: mainMenu(access) });
 }
 
-const categoryLabels: Record<Category, string> = { foundation: '🔤 Первые шаги', grammar: '📖 Грамматика', vocabulary: '🧺 Слова', situations: '💬 Общение' };
+const categoryLabels: Record<Category, string> = { foundation: '🔤 Первые шаги', grammar: '📖 Грамматика', vocabulary: '🧺 Слова', situations: '💬 Общение и письмо' };
 
 function catalogReturn(user: User, level: Level) {
   if (user.classContext) return `class:topics:${user.classContext}:0`;
-  if (user.schoolCatalog) return `school:${user.schoolCatalog.grade}:${user.schoolCatalog.category ?? 'all'}:${user.schoolCatalog.page}`;
+  if (user.schoolCatalog) return user.schoolCatalog.strand ? `schg:${user.schoolCatalog.grade}:${user.schoolCatalog.strand}:${user.schoolCatalog.page}` : `school:${user.schoolCatalog.grade}:${user.schoolCatalog.category ?? 'all'}:${user.schoolCatalog.page}`;
   const context = user.catalog;
   return context?.level === level ? `${context.category ? `g:${level}:${context.category}` : `l:${level}`}:${context.page}` : `l:${level}:0`;
 }
@@ -74,9 +74,9 @@ function catalogReturn(user: User, level: Level) {
 function showTextbook(state: BotState, user: User, messageId?: number) {
   delete user.classContext;
   delete user.schoolCatalog;
-  panel(state, user, '📚 Учебник английского\n\n🏫 По школьным классам\nПодборки тем для знакомства, изучения и повторения.\n\n🌱 По уровням\nA1 — начинаем. A2 — продолжаем. Удобно и детям, и взрослым.\n\nВ каждой теме: правило, картинки, примеры, ловушки и упражнения.\n\n👇 Как будем искать тему?', { inline_keyboard: [
+  panel(state, user, '📚 Учебник английского\n\n🏫 По школьным классам\nПодборки от первых слов до сложной грамматики и письма.\n\n🌱 По уровням\nA1 — первые шаги. A2 — основа.\nB1 — связная речь. B2 — сложные конструкции.\n\nВ каждой теме: правило, картинки, примеры, ловушки и упражнения.\n\n👇 Как будем искать тему?', { inline_keyboard: [
     [{ text: '🏫 По школьным классам', callback_data: 'book:school' }],
-    [{ text: '🌱 По уровням A1–A2', callback_data: 'book:levels' }],
+    [{ text: '🌱 По уровням A1–B2', callback_data: 'book:levels' }],
     [{ text: '🏠 Главное меню', callback_data: 'home' }],
   ] }, messageId);
 }
@@ -86,16 +86,16 @@ function showSchoolYears(state: BotState, user: User, messageId?: number) {
   delete user.schoolCatalog;
   const rows = [];
   for (let i = 0; i < schoolYears.length; i += 2) rows.push(schoolYears.slice(i, i + 2).map(y => ({ text: `${y.grade} класс${y.revision ? ' · повторение' : ''}`, callback_data: `school:${y.grade}` })));
-  panel(state, user, '🏫 Учебник → школьные классы\n\nВыбери класс, затем раздел и тему. Учебную группу создавать не нужно.\n\n📚 Это подборки из нашей библиотеки A1–A2. Порядок тем в твоей школе может отличаться.\n\n🔁 Для 8–11 классов пока доступно повторение базы A1–A2; полного материала старших классов ещё нет.', { inline_keyboard: [...rows, [{ text: '🌱 По уровням', callback_data: 'book:levels' }, { text: '📚 Учебник', callback_data: 'book' }]] }, messageId);
+  panel(state, user, '🏫 Учебник → школьные классы\n\nВыбери класс → раздел → тематический блок → тему. Учебную группу создавать не нужно.\n\n📚 В младших классах — первые слова и простые фразы. В старших добавлены темы B1–B2.\n\nПодборки ориентировочные: программа твоей школы может отличаться. Это растущая библиотека, а не полный школьный учебник.', { inline_keyboard: [...rows, [{ text: '🌱 По уровням', callback_data: 'book:levels' }, { text: '📚 Учебник', callback_data: 'book' }]] }, messageId);
 }
 
-function showSchool(state: BotState, user: User, grade: number, category?: Category | null, page = 0, messageId?: number) {
+function showSchool(state: BotState, user: User, grade: number, category?: Category | null, page = 0, messageId?: number, strand?: GrammarStrand | 'all') {
   const year = schoolYears.find(y => y.grade === grade);
   if (!year) return send(state, user.id, 'Такой класс не найден. Открой 📚 Учебник.');
   delete user.classContext;
   const all = schoolLessons(grade, availableLessons(state));
   const completed = new Set(Object.values(state.attempts).filter(a => a.studentId === user.id && a.completedAt && !a.reviewOf).map(a => a.lesson.id));
-  const intro = `🏫 Учебник → ${grade} класс\n\n${year.focus}\n${year.revision ? '🔁 Повторение A1–A2, материал класса пока неполный.' : '📚 Подборка A1–A2; порядок тем можно уточнить у репетитора.'}\n\n✅ Пройдено тем: ${all.filter(l => completed.has(l.id)).length} из ${all.length}`;
+  const intro = `🏫 Учебник → ${grade} класс\n\n${year.focus}\n📚 Учебная подборка; порядок тем уточняй у репетитора.\n\n✅ Пройдено тем: ${all.filter(l => completed.has(l.id)).length} из ${all.length}`;
   if (category === undefined) {
     user.schoolCatalog = { grade, category: null, page: 0 };
     const categories = (Object.keys(categoryLabels) as Category[]).filter(c => all.some(l => l.category === c));
@@ -105,17 +105,26 @@ function showSchool(state: BotState, user: User, grade: number, category?: Categ
       [{ text: '🏫 Другой класс', callback_data: 'book:school' }, { text: '🌱 По уровням', callback_data: 'book:levels' }],
     ] }, messageId);
   }
-  const items = category ? all.filter(l => l.category === category) : all;
+  if (category === 'grammar' && !strand) {
+    const grammar = all.filter(l => l.category === 'grammar');
+    user.schoolCatalog = { grade, category, page: 0 };
+    return panel(state, user, `${intro}\n\n📖 Грамматика → выбери блок\nКороткие тематические списки помогут найти нужное правило.`, { inline_keyboard: [
+      ...(Object.keys(grammarStrands) as GrammarStrand[]).filter(s => grammar.some(l => lessonStrand(l) === s)).map(s => [{ text: `${grammarStrands[s]} · ${grammar.filter(l => lessonStrand(l) === s).length}`, callback_data: `schg:${grade}:${s}:0` }]),
+      [{ text: '📖 Вся грамматика', callback_data: `schg:${grade}:all:0` }], [{ text: `🗂 Разделы ${grade} класса`, callback_data: `school:${grade}` }],
+    ] }, messageId);
+  }
+  const items = all.filter(l => (!category || l.category === category) && (!strand || strand === 'all' || lessonStrand(l) === strand));
   const pages = Math.max(1, Math.ceil(items.length / 5));
   if (!Number.isInteger(page) || page < 0 || page >= pages) return send(state, user.id, 'Страница больше не доступна. Открой класс заново: /school');
-  user.schoolCatalog = { grade, category, page };
-  const prefix = `school:${grade}:${category ?? 'all'}`;
+  user.schoolCatalog = { grade, category, page, ...(strand ? { strand } : {}) };
+  const prefix = strand ? `schg:${grade}:${strand}` : `school:${grade}:${category ?? 'all'}`;
   const arrows = [];
   if (page > 0) arrows.push({ text: '⬅️ Назад', callback_data: `${prefix}:${page - 1}` });
   if (page + 1 < pages) arrows.push({ text: 'Дальше ➡️', callback_data: `${prefix}:${page + 1}` });
-  panel(state, user, `${intro}\n\n${category ? categoryLabels[category] : '📚 Все темы класса'}\n📄 Страница ${page + 1} из ${pages}\n\n${items.length ? '👇 Выбери тему.' : 'В этом разделе пока нет тем. Выбери другой раздел или уровень.'}`, { inline_keyboard: [
+  panel(state, user, `${intro}\n\n${strand && strand !== 'all' ? grammarStrands[strand] : category ? categoryLabels[category] : '📚 Все темы класса'}\n📄 Страница ${page + 1} из ${pages}\n\n${items.length ? '👇 Выбери тему.' : 'В этом разделе пока нет тем. Выбери другой раздел или уровень.'}`, { inline_keyboard: [
     ...items.slice(page * 5, page * 5 + 5).map(l => [{ text: `${completed.has(l.id) ? '✅' : l.icon ?? '📘'} ${l.title}`, callback_data: `t:${l.id}` }]),
     ...(arrows.length ? [arrows] : []),
+    ...(strand ? [[{ text: '📖 Блоки грамматики', callback_data: `school:${grade}:grammar:0` }]] : []),
     [{ text: `🗂 Разделы ${grade} класса`, callback_data: `school:${grade}` }],
     [{ text: '🏫 Другой класс', callback_data: 'book:school' }, { text: '📚 Учебник', callback_data: 'book' }],
   ] }, messageId);
@@ -154,7 +163,7 @@ function showCatalog(state: BotState, user: User, level?: Level, page = 0, messa
   const lessons = availableLessons(state);
   const levels = [...new Set(lessons.map((item) => item.level))].sort();
   if (!level) {
-    panel(state, user, `📚 Библиотека английского\n\n🌱 A1 — первые шаги\n🌿 A2 — продолжаем учиться\n\n${lessons.length} тем · выбирай подходящую ниже.\n✅ означает, что ты уже закончил практику по теме.`, {
+    panel(state, user, `📚 Библиотека английского\n\n🌱 A1 — первые шаги\n🌿 A2 — продолжаем учиться\n🌳 B1 — связная речь и грамматика\n🎓 B2 — сложные конструкции и рассуждения\n\n${lessons.length} тем · выбирай подходящую ниже.\n✅ означает, что ты уже закончил практику по теме.`, {
       inline_keyboard: [...levels.map((value) => [{ text: `${value === 'A1' ? '🌱' : '🌿'} ${value} · ${lessons.filter((item) => item.level === value).length} тем`, callback_data: `l:${value}:0` }]), [{ text: '🏫 По школьным классам', callback_data: 'book:school' }, { text: '📚 Учебник', callback_data: 'book' }]],
     }, messageId);
     return;
@@ -342,9 +351,11 @@ export function handleUpdate(state: BotState, update: TelegramUpdate, teacherIds
     if (data === 'book:levels') return showCatalog(state, user, undefined, 0, messageId);
     const schoolMatch = /^school:(\d{1,2})(?::(foundation|grammar|vocabulary|situations|all):(\d+))?$/u.exec(data);
     if (schoolMatch) return showSchool(state, user, Number(schoolMatch[1]), schoolMatch[2] ? schoolMatch[2] === 'all' ? null : schoolMatch[2] as Category : undefined, Number(schoolMatch[3] ?? 0), messageId);
+    const strandMatch = /^schg:(\d{1,2}):(tenses|nouns|modifiers|verbs|sentences|all):(\d+)$/u.exec(data);
+    if (strandMatch) return showSchool(state, user, Number(strandMatch[1]), 'grammar', Number(strandMatch[3]), messageId, strandMatch[2] as GrammarStrand | 'all');
     if (data === 'levels') return showCatalog(state, user, undefined, 0, messageId);
     if (data === 'mode') return showMode(state, user, messageId);
-    const groupsMatch = /^groups:(A1|A2)$/u.exec(data);
+    const groupsMatch = /^groups:(A1|A2|B1|B2|C1|C2)$/u.exec(data);
     if (groupsMatch) return showGroups(state, user, groupsMatch[1] as Level, messageId);
     if (data === 'mode:child' || data === 'mode:adult') {
       user.learningMode = data === 'mode:child' ? 'child' : 'adult';
@@ -411,7 +422,7 @@ export function handleUpdate(state: BotState, update: TelegramUpdate, teacherIds
     }
     const editActions: Record<string, string> = { 'editor:type:choice': 'choice', 'editor:type:text': 'text', 'editor:photo': '/attach_rule', 'editor:no-photo': '/remove_rule_photo', 'editor:preview': '/preview', 'editor:publish': '/publish', 'editor:discard': '/discard', 'editor:add': '/add_question', 'editor:title': '/title', 'editor:rule': '/rule', 'editor:examples': '/examples', 'editor:traps': '/traps', 'editor:help': '/editor_help' };
     if (data.startsWith('editor:type:') && state.editors?.[id]?.step !== 'type') return send(state, id, 'Выбор типа уже завершён. Продолжи текущий вопрос.');
-    const editorExtra: Record<string, string> = { 'editor:grades': '/school_grades', 'editor:back': '/editor', 'editor:questions': '/questions', 'editor:level': '/level', 'editor:level:A1': '/level A1', 'editor:level:A2': '/level A2' };
+    const editorExtra: Record<string, string> = { 'editor:grades': '/school_grades', 'editor:back': '/editor', 'editor:questions': '/questions', 'editor:level': '/level', 'editor:level:A1': '/level A1', 'editor:level:A2': '/level A2', 'editor:level:B1': '/level B1', 'editor:level:B2': '/level B2' };
     if (Object.hasOwn(editorExtra, data)) return handleEditor(state, user, editorExtra[data], { teacher, admin, send: (value, extra) => send(state, id, value, extra) });
     if (editMatch || editPage || Object.hasOwn(editActions, data)) return handleEditor(state, user, editMatch ? `/edit ${editMatch[1]}` : editPage ? `/editor ${editPage[1]}` : editActions[data], { teacher, admin, send: (value, extra) => send(state, id, value, extra) });
     const homeworkMatch = /^h:([a-f0-9]{16})$/u.exec(data);
@@ -422,7 +433,7 @@ export function handleUpdate(state: BotState, update: TelegramUpdate, teacherIds
     }
     const catalogMatch = /^l:(A1|A2|B1|B2|C1|C2):(\d+)$/u.exec(data);
     if (catalogMatch) return showCatalog(state, user, catalogMatch[1] as Level, Number(catalogMatch[2]), messageId);
-    const groupMatch = /^g:(A1|A2):(foundation|grammar|vocabulary|situations):(\d+)$/u.exec(data);
+    const groupMatch = /^g:(A1|A2|B1|B2|C1|C2):(foundation|grammar|vocabulary|situations):(\d+)$/u.exec(data);
     if (groupMatch) return showCatalog(state, user, groupMatch[1] as Level, Number(groupMatch[3]), messageId, groupMatch[2] as Category);
     const topicMatch = /^(t|p):([a-z0-9-]{1,40})$/u.exec(data);
     if (topicMatch) return topicMatch[1] === 't' ? showLesson(state, user, topicMatch[2], messageId) : startLesson(state, user, topicMatch[2]);

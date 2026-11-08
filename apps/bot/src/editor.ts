@@ -152,7 +152,7 @@ export function handleEditor(state: BotState, user: User, text: string, { teache
     else { draft.lesson.title = body; send('🏷 Название сохранено.\n\nДобавь вопрос кнопкой «➕ Вопрос», затем сохрани готовое ДЗ кнопкой «✅ Опубликовать».', { reply_markup: draftButtons() }); }
   } else if (command === '/level') {
     if (!body) {
-      send('🌱 Выбери уровень задания.', { reply_markup: { inline_keyboard: [[{ text: 'A1', callback_data: 'editor:level:A1' }, { text: 'A2', callback_data: 'editor:level:A2' }]] } }); return true;
+      send('🌱 Выбери уровень задания.', { reply_markup: { inline_keyboard: [[{ text: 'A1', callback_data: 'editor:level:A1' }, { text: 'A2', callback_data: 'editor:level:A2' }], [{ text: 'B1', callback_data: 'editor:level:B1' }, { text: 'B2', callback_data: 'editor:level:B2' }]] } }); return true;
     }
     const level = body.toUpperCase();
     if (!['A1', 'A2', 'B1', 'B2', 'C1', 'C2'].includes(level)) send('Укажи уровень A1–C2.');
