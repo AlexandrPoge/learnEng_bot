@@ -1,4 +1,5 @@
 import type { Attempt, Question } from './types.js';
+import { timeSummary } from './timing.js';
 export function normalizeAnswer(value: string) {
   return value.normalize('NFKC').trim().toLocaleLowerCase('en')
     .replace(/[’‘]/gu, "'").replace(/\s+/gu, ' ').replace(/[.!?]+$/gu, '').trim();
@@ -10,14 +11,14 @@ export function gradeAnswer(question: Pick<Question, 'accepted'>, answer: string
 
 export function buildReport(attempt: Attempt, studentName: string) {
   const score = attempt.answers.filter((answer) => answer.correct).length;
-  const seconds = Math.max(0, Math.round((Date.parse(attempt.completedAt ?? attempt.startedAt) - Date.parse(attempt.startedAt)) / 1000));
   return [
     `Ученик: ${studentName}`,
     `Тема: ${attempt.lesson.title} (${attempt.lesson.level}), версия ${attempt.lesson.version}`,
     `Результат: ${score}/${attempt.lesson.questions.length}`,
     ...(attempt.reviewOf ? ['Режим: повторение ошибок (отдельная тренировочная попытка)'] : []),
     ...(attempt.hintsUsed?.length ? [`Подсказки использованы: ${attempt.hintsUsed.length}`] : []),
-    `Время между началом и отправкой: ${seconds} сек. (включая перерывы)`,
+    timeSummary(attempt),
+    ...(attempt.mode === 'test' ? ['Режим: проверочная работа (разбор после сдачи)'] : []),
     ...(attempt.assignmentId ? [`Домашнее задание: ${attempt.late ? 'сдано после срока' : 'сдано вовремя'}\nСрок (UTC): ${attempt.deadline}`] : []),
     ...attempt.answers.map((answer, index) => {
       const question = attempt.lesson.questions[index];

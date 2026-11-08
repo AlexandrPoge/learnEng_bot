@@ -1,5 +1,6 @@
 import { lessons, validateCatalog } from '../../../packages/content/catalog.js';
 import { lessonSections } from '../../../packages/content/presentation.js';
+import { randomBytes } from 'node:crypto';
 import type { BotState, User, Lesson, EditorDraft, Question, Section, Level, TelegramPayload } from '../../../packages/domain/types.js';
 
 export const availableLessons = (state: BotState): Lesson[] => {
@@ -14,7 +15,9 @@ const editorHelp = 'Редактор:\n/edit ID — открыть урок\n/ne
 function draftButtons() {
   return { inline_keyboard: [
     [{ text: '🏷 Название', callback_data: 'editor:title' }, { text: '📖 Правило', callback_data: 'editor:rule' }],
+    [{ text: '🌱 Уровень', callback_data: 'editor:level' }, { text: '🔧 Изменить вопросы', callback_data: 'editor:questions' }],
     [{ text: '💡 Примеры', callback_data: 'editor:examples' }, { text: '⚠️ Ловушки', callback_data: 'editor:traps' }],
+    [{ text: '🖼 Своя картинка правила', callback_data: 'editor:photo' }, { text: '🧽 Убрать картинку', callback_data: 'editor:no-photo' }],
     [{ text: '➕ Вопрос', callback_data: 'editor:add' }, { text: '👀 Предпросмотр', callback_data: 'editor:preview' }],
     [{ text: '✅ Опубликовать', callback_data: 'editor:publish' }, { text: '🗑 Закрыть черновик', callback_data: 'editor:discard' }],
     [{ text: '❓ Все команды', callback_data: 'editor:help' }],
@@ -26,7 +29,7 @@ export function handleEditor(state: BotState, user: User, text: string, { teache
   const [raw, ...parts] = text.split(/\s+/u);
   const command = raw.split('@')[0].toLowerCase();
   const body = text.slice(raw.length).trim();
-  const commands = ['/editor', '/editor_help', '/edit', '/new', '/title', '/level', '/theory', '/rule', '/examples', '/traps', '/add_question', '/edit_question', '/remove_question', '/preview', '/publish', '/discard', '/history', '/restore'];
+  const commands = ['/editor', '/editor_help', '/edit', '/new', '/new_homework', '/edit_homework', '/attach_rule', '/remove_rule_photo', '/questions', '/question', '/title', '/level', '/theory', '/rule', '/examples', '/traps', '/add_question', '/edit_question', '/remove_question', '/preview', '/publish', '/discard', '/history', '/restore'];
   state.editors ??= {};
   let draft = state.editors[user.id];
   if (!commands.includes(command) && !((draft?.step || draft?.inputField) && !text.startsWith('/'))) return false;
@@ -52,7 +55,20 @@ export function handleEditor(state: BotState, user: User, text: string, { teache
     return true;
   }
   if (command === '/discard') { delete state.editors[user.id]; send('Черновик закрыт.'); return true; }
+  if (command === '/new_homework' || command === '/edit_homework') {
+    if (user.activeAttempt || draft) { send('Сначала заверши практику /cancel или закрой черновик /discard.'); return true; }
+    delete user.workspace;
+    const template = command === '/edit_homework' ? state.homeworkTemplates?.[parts[0]] : undefined;
+    if (command === '/edit_homework' && (!template || (!admin && template.ownerId !== user.id))) { send('Своё ДЗ не найдено. /my_homework'); return true; }
+    const id = template?.id ?? `hw-${randomBytes(8).toString('hex')}`;
+    state.editors[user.id] = { destination: 'homework', baseVersion: template?.lesson.version ?? 0,
+      lesson: template ? structuredClone(template.lesson) : { id, title: '', level: 'A1', category: 'grammar', version: 1, estimatedMinutes: 10, theory: 'Выполни задания. Внимательно прочитай каждый вопрос.', questions: [] },
+      step: null, ...(template ? {} : { inputField: 'title' }) };
+    send(template ? `📝 Черновик ДЗ: ${template.lesson.title}` : '📝 Создаём своё ДЗ\n\nШаг 1. Отправь название. Затем добавь вопросы и правильные ответы.\n\nДЗ сохранится отдельно от общего учебника.', template ? { reply_markup: draftButtons() } : {});
+    return true;
+  }
   if (command === '/new' || command === '/edit') {
+    if (user.workspace) { send('Сначала закрой настройку класса или назначения: /cancel_setup'); return true; }
     if (user.activeAttempt) { send('Сначала заверши практику или отмени её: /cancel'); return true; }
     if (draft) { send('Есть открытый черновик. Сначала /publish или /discard.'); return true; }
     const id = parts[0];
@@ -86,6 +102,28 @@ export function handleEditor(state: BotState, user: User, text: string, { teache
     return true;
   }
   if (!draft) { send('Сначала открой /edit ID или /new ID'); return true; }
+  if (command === '/questions' || command === '/question') {
+    if (draft.step || draft.inputField || draft.awaitingPhoto) { send('Сначала закончи текущее поле, картинку или вопрос.'); return true; }
+    if (command === '/questions') {
+      send('🔧 Вопросы черновика\n\nВыбери вопрос для правки или удаления.', { reply_markup: { inline_keyboard: [...draft.lesson.questions.map((q, i) => [{ text: `${i + 1}. ${q.prompt.slice(0, 60)}`, callback_data: `editor:q:${q.id}` }]), [{ text: '➕ Новый вопрос', callback_data: 'editor:add' }, { text: '✏️ К черновику', callback_data: 'editor:back' }]] } });
+    } else {
+      const q = draft.lesson.questions.find(q => q.id === parts[0]);
+      if (!q) { send('Вопрос не найден в черновике.'); return true; }
+      send(`🔧 ${q.prompt}\n\n${q.options?.join('\n') ?? 'Ответ вводится текстом'}\n\n🔑 Ключ: ${q.accepted.join(' / ')}\n💡 ${q.explanation}\n\nУдаление уберёт вопрос только из черновика.`, { reply_markup: { inline_keyboard: [[{ text: '✏️ Заменить вопрос', callback_data: `editor:replace:${q.id}` }], [{ text: '🗑 Удалить из черновика', callback_data: `editor:remove:${q.id}` }], [{ text: '🔧 Все вопросы', callback_data: 'editor:questions' }]] } });
+    }
+    return true;
+  }
+  if (command === '/attach_rule' || command === '/remove_rule_photo') {
+    if (draft.step || draft.inputField) { send('Сначала закончи текущее поле или вопрос.'); return true; }
+    if (command === '/remove_rule_photo') {
+      delete draft.lesson.rulePhoto; delete draft.awaitingPhoto;
+      send('Картинка убрана из черновика. Будут доступны карточки из текста.', { reply_markup: draftButtons() });
+    } else {
+      draft.awaitingPhoto = true;
+      send('🖼 Отправь картинку правила как фото (не файл). Она сохранится в черновике. После этого нажми «Опубликовать». Отмена ожидания: /remove_rule_photo');
+    }
+    return true;
+  }
   if (draft.step && ['/add_question', '/edit_question', '/remove_question'].includes(command)) {
     send('Сначала закончи текущий вопрос или закрой черновик: /discard'); return true;
   }
@@ -98,11 +136,14 @@ export function handleEditor(state: BotState, user: User, text: string, { teache
   }
   if (command === '/title') {
     if (!body || body.length > 100) send('Название: от 1 до 100 символов.');
-    else { draft.lesson.title = body; send('Название сохранено в черновике.'); }
+    else { draft.lesson.title = body; send('🏷 Название сохранено.\n\nДобавь вопрос кнопкой «➕ Вопрос», затем сохрани готовое ДЗ кнопкой «✅ Опубликовать».', { reply_markup: draftButtons() }); }
   } else if (command === '/level') {
+    if (!body) {
+      send('🌱 Выбери уровень задания.', { reply_markup: { inline_keyboard: [[{ text: 'A1', callback_data: 'editor:level:A1' }, { text: 'A2', callback_data: 'editor:level:A2' }]] } }); return true;
+    }
     const level = body.toUpperCase();
     if (!['A1', 'A2', 'B1', 'B2', 'C1', 'C2'].includes(level)) send('Укажи уровень A1–C2.');
-    else { draft.lesson.level = level as Level; send('Уровень сохранён.'); }
+    else { draft.lesson.level = level as Level; send('Уровень сохранён.', { reply_markup: draftButtons() }); }
   } else if (command === '/theory') {
     if (!body || body.length > 12000) send('Отправь /theory и текст до 12000 символов: правило, примеры и ловушки.');
     else { draft.lesson.theory = body; delete draft.lesson.childIntro; delete draft.lesson.memory; send('📖 Объяснение сохранено в черновике.', { reply_markup: draftButtons() }); }
@@ -121,22 +162,32 @@ export function handleEditor(state: BotState, user: User, text: string, { teache
     delete draft.inputField;
     draft.pending = { replaceId: command === '/edit_question' ? parts[0] : null };
     draft.step = 'type';
-    send('Тип вопроса: отправь choice (варианты) или text (пропуск).');
+    send('Выбери тип вопроса.', { reply_markup: { inline_keyboard: [[{ text: '🔘 Варианты ответа', callback_data: 'editor:type:choice' }, { text: '⌨️ Вписать ответ', callback_data: 'editor:type:text' }]] } });
   } else if (command === '/remove_question') {
     const before = draft.lesson.questions.length;
     draft.lesson.questions = draft.lesson.questions.filter((item) => item.id !== parts[0]);
-    send(before === draft.lesson.questions.length ? 'ID вопроса не найден.' : 'Вопрос удалён из черновика.');
+    send(before === draft.lesson.questions.length ? 'ID вопроса не найден.' : 'Вопрос удалён из черновика.', { reply_markup: draftButtons() });
   } else if (command === '/preview') {
     send(`${draft.lesson.title || '(без названия)'} · ${draft.lesson.level}\n\n${draft.lesson.theory || '(нет объяснения)'}`);
     for (const item of draft.lesson.questions) send(`${item.id}. ${item.prompt}\n${item.options?.map((option, index) => `${index + 1}. ${option}`).join('\n') ?? ''}\nКлюч: ${item.accepted.join(' / ')}\n${item.explanation}`);
     if (draft.step) send(`Добавление вопроса не закончено: ${draft.step}. Продолжи или /discard.`);
   } else if (command === '/publish') {
-    if (draft.step || draft.inputField) { send('Сначала закончи редактирование текущего поля или вопроса.'); return true; }
-    if ((findLesson(state, draft.lesson.id)?.version ?? 0) !== draft.baseVersion) { send('Урок изменён другим редактором. Сохрани свой текст, затем /discard и /edit ID для свежей версии.'); return true; }
+    if (draft.step || draft.inputField || draft.awaitingPhoto) { send('Сначала закончи редактирование текущего поля, картинки или вопроса.'); return true; }
+    const template = state.homeworkTemplates?.[draft.lesson.id];
+    if (draft.destination === 'homework' && template && !admin && template.ownerId !== user.id) { send('Нет доступа к этому ДЗ.'); return true; }
+    const currentVersion = draft.destination === 'homework' ? template?.lesson.version : findLesson(state, draft.lesson.id)?.version;
+    if ((currentVersion ?? 0) !== draft.baseVersion) { send('Материал изменён другим редактором. Сохрани свой текст и открой свежую версию после /discard.'); return true; }
     try { validateCatalog([draft.lesson]); }
     catch { send('Нужны название, объяснение и хотя бы один вопрос с правильным ключом. /preview'); return true; }
-    publish(state, user.id, draft.lesson);
-    send(`Опубликовано: ${draft.lesson.title}, версия ${findLesson(state, draft.lesson.id)!.version}.`);
+    if (draft.destination === 'homework') {
+      state.homeworkTemplates ??= {};
+      state.homeworkTemplates[draft.lesson.id] = { id: draft.lesson.id, ownerId: template?.ownerId ?? user.id,
+        lesson: { ...structuredClone(draft.lesson), version: (currentVersion ?? 0) + 1 }, updatedAt: new Date().toISOString() };
+      send(`✅ ДЗ сохранено: ${draft.lesson.title}\n\nТеперь выбери, кому его назначить.`, { reply_markup: { inline_keyboard: [[{ text: '📨 Назначить', callback_data: `work:send:${draft.lesson.id}` }], [{ text: '📝 Мои ДЗ', callback_data: 'work:list:0' }]] } });
+    } else {
+      publish(state, user.id, draft.lesson);
+      send(`Опубликовано: ${draft.lesson.title}, версия ${findLesson(state, draft.lesson.id)!.version}.`);
+    }
     delete state.editors[user.id];
   } else if (draft.step && !text.startsWith('/')) {
     addQuestion(draft, text, send);
@@ -189,6 +240,6 @@ function addQuestion(draft: EditorDraft, text: string, send: EditorContext['send
       draft.lesson.questions.push({ id: `q${number}`, ...complete } as Question);
     }
     draft.step = null; delete draft.pending;
-    send('Вопрос сохранён в черновике. /add_question, /preview или /publish');
+    send('✅ Вопрос сохранён в черновике.\n\nДобавь следующий вопрос или опубликуй готовое задание.', { reply_markup: draftButtons() });
   }
 }

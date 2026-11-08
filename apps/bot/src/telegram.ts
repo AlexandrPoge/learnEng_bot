@@ -14,9 +14,16 @@ export function telegramClient(token: string, fetcher: Fetcher = fetch): Telegra
   return async <M extends keyof TelegramResults>(method: M, payload: TelegramPayload = {}, signal?: AbortSignal): Promise<TelegramResults[M]> => {
     let response;
     try {
+      const multipart = Object.values(payload).some(value => value instanceof Blob);
+      const form = multipart ? new FormData() : undefined;
+      if (form) for (const [key, value] of Object.entries(payload)) {
+        if (value === undefined) continue;
+        if (value instanceof Blob) form.append(key, value, 'rule.png');
+        else form.append(key, typeof value === 'object' ? JSON.stringify(value) : String(value));
+      }
       response = await fetcher(`https://api.telegram.org/bot${token}/${method}`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload), signal: signal ?? AbortSignal.timeout(45000),
+        method: 'POST', ...(multipart ? {} : { headers: { 'Content-Type': 'application/json' } }),
+        body: form ?? JSON.stringify(payload), signal: signal ?? AbortSignal.timeout(45000),
       });
     } catch {
       // Не выводим URL запроса: он содержит токен.

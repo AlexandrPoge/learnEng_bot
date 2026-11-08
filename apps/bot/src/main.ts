@@ -4,6 +4,7 @@ import { openStore } from './store.js';
 import { telegramClient } from './telegram.js';
 import { handleUpdate } from './handler.js';
 import { rolesFor } from '../../../packages/domain/roles.js';
+import { deliverTask } from './delivery.js';
 
 async function run() {
   const config = readConfig();
@@ -24,13 +25,15 @@ async function run() {
         await store.commit(next);
         continue;
       }
-      try { await api(task.method, task.payload, controller.signal); }
+      let imageCache: { key: string; fileId: string } | undefined;
+      try { imageCache = await deliverTask(store.state, task, api, controller.signal); }
       catch (error) {
         // Недоступный чат или истёкший callback не блокируют остальные отчёты.
         if (![400, 403].includes(error.code)) throw error;
         console.warn(`Сообщение не доставлено: ${error.message}`);
       }
       const next = structuredClone(store.state);
+      if (imageCache) (next.ruleImages ??= {})[imageCache.key] = imageCache.fileId;
       next.outbox.shift();
       await store.commit(next);
     }
