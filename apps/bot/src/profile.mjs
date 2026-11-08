@@ -1,4 +1,5 @@
 export const publicCommands = [
+  { command: 'menu', description: '🏠 Главное меню' },
   { command: 'start', description: 'Начать обучение' },
   { command: 'topics', description: 'Темы английского по уровням' },
   { command: 'practice', description: 'Начать или продолжить практику' },
@@ -7,6 +8,7 @@ export const publicCommands = [
   { command: 'cancel', description: 'Отменить текущую попытку' },
   { command: 'whoami', description: 'Мой Telegram ID и роль' },
   { command: 'help', description: 'Помощь и команды' },
+  { command: 'mode', description: '⚙️ Подача для детей или взрослых' },
 ];
 
 export async function configureProfile(api, adminIds) {
@@ -19,6 +21,7 @@ export async function configureProfile(api, adminIds) {
       ...publicCommands,
       { command: 'admin', description: 'Управление и роли' },
       { command: 'editor', description: 'Редактор учебных материалов' },
+      { command: 'teacher', description: '👩‍🏫 Кабинет репетитора' },
       { command: 'invite', description: 'Пригласить ученика' },
       { command: 'results', description: 'Работы учеников' },
     ] });
