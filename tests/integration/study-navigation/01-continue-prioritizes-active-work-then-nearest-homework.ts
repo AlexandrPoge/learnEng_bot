@@ -1,3 +1,4 @@
+import { expectValue } from '../../helpers/expectations.js';
 import { past, harness, assignment } from './helpers.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -27,7 +28,7 @@ test('continue prioritizes active work, then nearest homework, reading and textb
   assert.equal(attempt.assignmentId, nearest.id);
   const question = attempt.lesson.questions[0];
   if (question.type === 'choice') {
-    h.click(20, `a:${attempt.id}:0:${question.options.indexOf(question.accepted[0])}`);
+    h.click(20, `a:${attempt.id}:0:${expectValue(question.options).indexOf(question.accepted[0])}`);
   } else {
     h.send(20, question.accepted[0]);
   }

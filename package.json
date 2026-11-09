@@ -19,7 +19,7 @@
     "cloud:test": "node --import tsx --test tests/cloud/*.test.ts",
     "cloud:control": "node --env-file=.env --import tsx scripts/cloud-control.ts",
     "test": "node --import tsx --test tests/unit/*.test.ts tests/integration/*.test.ts",
-    "check": "tsc --noEmit",
+    "check": "tsc --noEmit && tsc --project tests/tsconfig.json",
     "check:structure": "node --import tsx scripts/check-structure.ts",
     "format": "prettier --write apps packages scripts tests package.json tsconfig.json .prettierrc.json",
     "format:check": "prettier --check apps packages scripts tests package.json tsconfig.json .prettierrc.json",

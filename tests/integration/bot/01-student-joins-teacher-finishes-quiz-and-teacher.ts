@@ -1,7 +1,7 @@
+import { expectValue, expectText } from '../../helpers/expectations.js';
 import { harness } from './helpers.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { join } from 'node:path';
 import { handleUpdate } from '../../../apps/bot/src/handler.js';
 
 test('student joins teacher, finishes quiz, and teacher gets original answers', () => {
@@ -13,7 +13,7 @@ test('student joins teacher, finishes quiz, and teacher gets original answers', 
   assert.equal(state.users['20'].teacherId, '10');
   assert.equal(state.users['21'].teacherId, undefined);
   text(20, '/practice');
-  const id = state.users['20'].activeAttempt;
+  const id = expectValue(state.users['20'].activeAttempt);
   click(20, id, 0, 1);
   click(20, id, 0, 1); // Double click must not answer the next question.
   assert.equal(state.attempts[id].answers.length, 1);
@@ -29,8 +29,8 @@ test('student joins teacher, finishes quiz, and teacher gets original answers', 
     (task) => task.payload.chat_id === '10' && task.payload.text?.includes('Новое выполненное'),
   );
   assert.equal(reports.length, 1);
-  assert.doesNotMatch(reports[0].payload.text, /Ответ:/u);
-  assert.match(reports[0].payload.text, /4\/5/u);
+  assert.doesNotMatch(expectText(reports[0].payload), /Ответ:/u);
+  assert.match(expectText(reports[0].payload), /4\/5/u);
   action(10, `report:${id}`);
   assert.ok(
     state.outbox.some((task) => task.payload.chat_id === '10' && task.payload.text?.includes('Ответ: plays')),

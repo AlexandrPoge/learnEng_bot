@@ -1,3 +1,4 @@
+import { expectValue, expectText, expectInlineKeyboard } from '../helpers/expectations.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { emptyState } from '../../apps/bot/src/store.js';
@@ -7,14 +8,14 @@ import { lessonSections } from '../../packages/content/presentation.js';
 
 function harness() {
   const state = emptyState();
-  const text = (id, body) =>
+  const text = (id: number, body: string) =>
     handleUpdate(
       state,
       { update_id: state.offset, message: { from: { id }, chat: { id, type: 'private' }, text: body } },
       [],
       ['10'],
     );
-  const click = (id, data) =>
+  const click = (id: number, data: string) =>
     handleUpdate(
       state,
       {
@@ -29,7 +30,7 @@ function harness() {
       [],
       ['10'],
     );
-  return { state, text, click, last: () => state.outbox.at(-1).payload };
+  return { state, text, click, last: () => expectValue(state.outbox.at(-1)).payload };
 }
 
 test('every topic has examples and labelled publisher resources or collections', () => {
@@ -44,9 +45,9 @@ test('every topic has examples and labelled publisher resources or collections',
     assert.ok(sections.rule.length >= 4, lesson.id);
     assert.ok(sections.examples.length >= 6, lesson.id);
     assert.ok(sections.traps.length >= 3, lesson.id);
-    assert.ok(lesson.resources.length >= 1, lesson.id);
+    assert.ok(expectValue(lesson.resources).length >= 1, lesson.id);
     assert.ok(lesson.version >= 1);
-    for (const resource of lesson.resources) {
+    for (const resource of expectValue(lesson.resources)) {
       const url = new URL(resource.url);
       assert.equal(url.protocol, 'https:');
       assert.ok(allowed.includes(url.hostname));
@@ -58,38 +59,38 @@ test('every topic has examples and labelled publisher resources or collections',
 test('reading position resumes and resets safely when the teacher changes the version', () => {
   const { state, text, click, last } = harness();
   click(20, 's:articles:examples:2');
-  assert.equal(state.users['20'].reading.page, 2);
+  assert.equal(expectValue(state.users['20'].reading).page, 2);
   text(20, '/continue');
-  assert.match(last().text, /шаг 3 из/u);
+  assert.match(expectText(last()), /шаг 3 из/u);
   text(10, '/edit articles');
   text(10, '/examples A new example. — Новый пример.');
   text(10, '/publish');
   text(20, '📍 Продолжить');
-  assert.match(last().text, /шаг 1 из/u);
-  assert.match(last().text, /A new example/u);
+  assert.match(expectText(last()), /шаг 1 из/u);
+  assert.match(expectText(last()), /A new example/u);
 });
 
 test('resources show a labelled external page and return to the same topic', () => {
   const { click, last } = harness();
   click(20, 'sources:prepositions-place');
-  assert.match(last().text, /Hero/u);
-  assert.match(last().text, /английском/u);
+  assert.match(expectText(last()), /Hero/u);
+  assert.match(expectText(last()), /английском/u);
   assert.ok(
-    last().reply_markup.inline_keyboard.some((row) =>
+    expectInlineKeyboard(last()).some((row) =>
       row.some((button) => button.url?.endsWith('/heros-adventure')),
     ),
   );
   assert.ok(
-    last()
-      .reply_markup.inline_keyboard.at(-1)
-      .some((button) => button.callback_data === 't:prepositions-place'),
+    expectValue(expectInlineKeyboard(last()).at(-1)).some(
+      (button) => button.callback_data === 't:prepositions-place',
+    ),
   );
 });
 
 test('hint never consumes an answer, and repetition uses only the original mistaken question', () => {
   const { state, text, click, last } = harness();
   text(20, '/practice present-simple');
-  const attempt = state.attempts[state.users['20'].activeAttempt];
+  const attempt = state.attempts[expectValue(state.users['20'].activeAttempt)];
   click(20, `hint:${attempt.id}:0`);
   click(20, `hint:${attempt.id}:0`);
   assert.equal(attempt.answers.length, 0);
@@ -98,7 +99,7 @@ test('hint never consumes an answer, and repetition uses only the original mista
     if (question.type === 'choice')
       click(
         20,
-        `a:${attempt.id}:${index}:${index === 0 ? 0 : question.options.indexOf(question.accepted[0])}`,
+        `a:${attempt.id}:${index}:${index === 0 ? 0 : expectValue(question.options).indexOf(question.accepted[0])}`,
       );
     else text(20, question.accepted[0]);
   }
@@ -106,9 +107,9 @@ test('hint never consumes an answer, and repetition uses only the original mista
   text(10, '/remove_question q1');
   text(10, '/publish');
   click(30, `repeat:${attempt.id}`);
-  assert.match(last().text, /твоей завершённой/u);
+  assert.match(expectText(last()), /твоей завершённой/u);
   click(20, `repeat:${attempt.id}`);
-  const retry = state.attempts[state.users['20'].activeAttempt];
+  const retry = state.attempts[expectValue(state.users['20'].activeAttempt)];
   assert.equal(retry.reviewOf, attempt.id);
   assert.equal(retry.assignmentId, null);
   assert.equal(retry.lesson.questions.length, 1);

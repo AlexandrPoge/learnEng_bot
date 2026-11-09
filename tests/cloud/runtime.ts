@@ -1,4 +1,3 @@
-import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, readdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';

@@ -1,3 +1,4 @@
+import { expectInlineKeyboard, expectValue } from '../helpers/expectations.js';
 import { createCloudRuntime } from './runtime.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -79,7 +80,7 @@ test('cloud webhook persists 30 concurrent pupils, deduplicates retries and rend
       (c) => c.method === 'sendMessage' && c.payload.text?.startsWith('Картинка временно недоступна.'),
     );
     assert.ok(fallback, 'A broken card must fall back to text without blocking other pupils');
-    assert.equal(fallback.payload.reply_markup.inline_keyboard[0][0].text, '📖 Правило');
+    assert.equal(expectInlineKeyboard(fallback.payload)[0][0].text, '📖 Правило');
     await delay(50);
     const originalCount = calls.length;
     await request('/telegram', updates[0], false);
@@ -98,7 +99,7 @@ test('cloud webhook persists 30 concurrent pupils, deduplicates retries and rend
       if (exported.users['1000'].activeAttempt) break;
       await delay(20);
     }
-    const attemptId = exported.users['1000'].activeAttempt;
+    const attemptId = expectValue(exported.users['1000'].activeAttempt);
     assert.ok(attemptId);
     await mf.dispose();
     mf = makeRuntime();

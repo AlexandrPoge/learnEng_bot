@@ -1,3 +1,4 @@
+import { expectValue, expectText } from '../../helpers/expectations.js';
 import { emptyState } from '../../../apps/bot/src/store.js';
 import { handleUpdate } from '../../../apps/bot/src/handler.js';
 
@@ -5,7 +6,7 @@ import { handleUpdate } from '../../../apps/bot/src/handler.js';
 export function setup() {
   const state = emptyState();
   let index = 0;
-  const send = (id, text) =>
+  const send = (id: number, text: string) =>
     handleUpdate(
       state,
       {
@@ -15,5 +16,5 @@ export function setup() {
       [],
       ['10'],
     );
-  return { state, send, last: () => state.outbox.at(-1).payload.text };
+  return { state, send, last: () => expectText(expectValue(state.outbox.at(-1)).payload) };
 }

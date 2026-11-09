@@ -1,3 +1,4 @@
+import { expectValue, expectInlineKeyboard } from '../../helpers/expectations.js';
 import { setup } from './helpers.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -28,17 +29,15 @@ test('new lesson wizard validates choices, publishes and lets a student complete
   send(10, '/preview');
   assert.match(last(), /Ключ: do/u);
   send(10, '/publish');
-  assert.equal(findLesson(state, 'test-topic').questions.length, 2);
+  assert.equal(expectValue(findLesson(state, 'test-topic')).questions.length, 2);
   send(30, '/topics B1');
   while (
-    !state.outbox
-      .at(-1)
-      .payload.reply_markup.inline_keyboard.flat()
+    !expectInlineKeyboard(expectValue(state.outbox.at(-1)).payload)
+      .flat()
       .some((b) => b.text.includes('Пробная тема'))
   ) {
-    const next = state.outbox
-      .at(-1)
-      .payload.reply_markup.inline_keyboard.flat()
+    const next = expectInlineKeyboard(expectValue(state.outbox.at(-1)).payload)
+      .flat()
       .find((b) => b.text.includes('Далее'));
     assert.ok(next, 'Published lesson must be reachable in the B1 catalog');
     handleUpdate(
@@ -57,9 +56,8 @@ test('new lesson wizard validates choices, publishes and lets a student complete
     );
   }
   assert.ok(
-    state.outbox
-      .at(-1)
-      .payload.reply_markup.inline_keyboard.flat()
+    expectInlineKeyboard(expectValue(state.outbox.at(-1)).payload)
+      .flat()
       .some((b) => b.text.includes('Пробная тема')),
   );
   handleUpdate(
@@ -71,7 +69,7 @@ test('new lesson wizard validates choices, publishes and lets a student complete
     [],
     ['10'],
   );
-  const id = state.users['30'].activeAttempt;
+  const id = expectValue(state.users['30'].activeAttempt);
   handleUpdate(
     state,
     {

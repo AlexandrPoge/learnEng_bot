@@ -1,3 +1,4 @@
+import { expectText, expectValue } from '../../helpers/expectations.js';
 import assert from 'node:assert/strict';
 import { emptyState } from '../../../apps/bot/src/store.js';
 import { handleUpdate } from '../../../apps/bot/src/handler.js';
@@ -41,8 +42,8 @@ export function harness(initial: BotState = emptyState()) {
     const b = last(id)
       .reply_markup?.inline_keyboard?.flat()
       .find((b) => b.text.includes(label));
-    assert.ok(b?.callback_data, `No visible button «${label}» in ${last(id).text}`);
-    click(id, b.callback_data);
+    assert.ok(b?.callback_data, `No visible button «${label}» in ${expectText(last(id))}`);
+    click(id, expectValue(b.callback_data));
   };
   const seek = (id: number, label: string) => {
     for (let i = 0; i < 20; i++) {

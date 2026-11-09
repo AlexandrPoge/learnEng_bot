@@ -1,7 +1,7 @@
+import { expectValue } from '../../helpers/expectations.js';
 import { harness } from './helpers.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { join } from 'node:path';
 import { handleUpdate } from '../../../apps/bot/src/handler.js';
 
 test('role checks, callback ownership, expired invitation and group privacy', () => {
@@ -15,7 +15,7 @@ test('role checks, callback ownership, expired invitation and group privacy', ()
   assert.equal(state.users['20'].teacherId, undefined);
   text(20, '/practice');
   text(21, '/practice');
-  const id = state.users['20'].activeAttempt;
+  const id = expectValue(state.users['20'].activeAttempt);
   click(21, id, 0, 1);
   assert.equal(state.attempts[id].answers.length, 0);
   const count = state.outbox.length;

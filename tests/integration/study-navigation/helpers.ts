@@ -1,3 +1,4 @@
+import { expectValue } from '../../helpers/expectations.js';
 import assert from 'node:assert/strict';
 import { emptyState } from '../../../apps/bot/src/store.js';
 import { handleUpdate } from '../../../apps/bot/src/handler.js';
@@ -44,13 +45,15 @@ export function harness(initial: BotState = emptyState()) {
   }
 
   const last = (id = 20) =>
-    state.outbox.filter((task) => task.payload.chat_id === String(id) && task.payload.text).at(-1)!.payload;
+    state.outbox
+      .filter((task) => task.payload.chat_id === String(id) && typeof task.payload.text === 'string')
+      .at(-1)!.payload;
   const buttons = (id = 20) => last(id).reply_markup!.inline_keyboard!.flat();
 
   function press(label: string, id = 20) {
     const selected = buttons(id).find((button) => button.text.includes(label));
     assert.ok(selected?.callback_data, `Missing button: ${label}`);
-    click(id, selected.callback_data);
+    click(id, expectValue(selected.callback_data));
   }
 
   send(20, '/menu');

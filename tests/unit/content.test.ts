@@ -1,3 +1,4 @@
+import { expectValue } from '../helpers/expectations.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { lessons, validateCatalog } from '../../packages/content/catalog.js';
@@ -12,7 +13,7 @@ test('all published topics have usable questions and unambiguous choice keys', (
       for (const answer of question.accepted) assert.equal(gradeAnswer(question, answer), true);
       if (question.type === 'choice') {
         assert.equal(
-          question.options.filter((answer) => gradeAnswer(question, answer)).length,
+          expectValue(question.options).filter((answer) => gradeAnswer(question, answer)).length,
           1,
           `${lesson.id}/${question.id}`,
         );

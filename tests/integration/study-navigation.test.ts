@@ -1,4 +1,3 @@
-import { test } from 'node:test';
 import './study-navigation/01-continue-prioritizes-active-work-then-nearest-homework.js';
 import './study-navigation/02-homework-uses-one-message-five-item-pages.js';
 import './study-navigation/03-progress-counts-full-attempts-only-latest-full.js';

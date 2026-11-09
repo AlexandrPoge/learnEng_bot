@@ -1,3 +1,4 @@
+import { expectValue } from '../../helpers/expectations.js';
 import { harness } from './helpers.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -9,7 +10,7 @@ test('all school routes have usable callbacks and training marks the shared topi
     h.send(20, `/school ${year.grade}`);
     h.press('Все темы класса');
     for (const b of h.last().reply_markup!.inline_keyboard!.flat())
-      if (b.callback_data) assert.ok(Buffer.byteLength(b.callback_data) <= 64);
+      if (b.callback_data) assert.ok(Buffer.byteLength(expectValue(b.callback_data)) <= 64);
   }
   h.send(20, '/school 1');
   h.press('Все темы класса');
@@ -17,7 +18,8 @@ test('all school routes have usable callbacks and training marks the shared topi
   h.press('Практика');
   const attempt = h.state.attempts[h.state.users['20'].activeAttempt!];
   for (const [i, q] of attempt.lesson.questions.entries()) {
-    if (q.type === 'choice') h.click(20, `a:${attempt.id}:${i}:${q.options.indexOf(q.accepted[0])}`);
+    if (q.type === 'choice')
+      h.click(20, `a:${attempt.id}:${i}:${expectValue(q.options).indexOf(q.accepted[0])}`);
     else h.send(20, q.accepted[0]);
   }
   h.send(20, '/school 2');

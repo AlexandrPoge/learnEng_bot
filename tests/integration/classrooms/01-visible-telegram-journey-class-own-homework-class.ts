@@ -1,3 +1,4 @@
+import { expectText } from '../../helpers/expectations.js';
 import { harness } from './helpers.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -60,7 +61,7 @@ test('visible Telegram journey: class → own homework → class assignment → 
   const response = state.outbox
     .slice(before)
     .filter((t) => t.payload.chat_id === '20')
-    .map((t) => t.payload.text)
+    .map((t) => expectText(t.payload))
     .join('\n');
   assert.doesNotMatch(response, /Правильный ответ|She → is|Правильно: is/u);
   assert.equal(attempt.answers.length, 1);

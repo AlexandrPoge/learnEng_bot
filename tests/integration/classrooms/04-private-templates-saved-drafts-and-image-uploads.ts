@@ -1,3 +1,4 @@
+import { expectValue } from '../../helpers/expectations.js';
 import { harness } from './helpers.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -51,6 +52,6 @@ test('private templates, saved drafts and image uploads respect roles and surviv
   assert.match(restored.last(21).text!, /недоступна/u);
   for (const task of restored.state.outbox)
     for (const b of task.payload.reply_markup?.inline_keyboard?.flat() ?? []) {
-      if (b.callback_data) assert.ok(Buffer.byteLength(b.callback_data) <= 64, b.callback_data);
+      if (b.callback_data) assert.ok(Buffer.byteLength(expectValue(b.callback_data)) <= 64, b.callback_data);
     }
 });

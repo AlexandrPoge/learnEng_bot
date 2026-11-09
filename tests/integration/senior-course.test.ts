@@ -1,3 +1,4 @@
+import { expectText, expectValue } from '../helpers/expectations.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { handleUpdate } from '../../apps/bot/src/handler.js';
@@ -38,8 +39,8 @@ function harness() {
     const b = last(id)
       .reply_markup?.inline_keyboard?.flat()
       .find((b) => b.text.includes(label));
-    assert.ok(b?.callback_data, `${label}: ${last(id).text}`);
-    click(id, b.callback_data);
+    assert.ok(b?.callback_data, `${label}: ${expectText(last(id))}`);
+    click(id, expectValue(b.callback_data));
   };
   return { state, send, click, last, press };
 }
@@ -93,8 +94,10 @@ test('new topics are complete units with balanced choice keys and available scho
     for (const grade of lesson.schoolGrades)
       assert.ok(schoolLessons(grade, lessons).some((l) => l.id === lesson.id));
     for (const q of lesson.questions)
-      if (q.type === 'choice') positions.add(q.options.indexOf(q.accepted[0]));
-    assert.ok(lesson.resources.every((r) => r.provider === 'Фоксфорд Учебник' && r.language === 'ru'));
+      if (q.type === 'choice') positions.add(expectValue(q.options).indexOf(q.accepted[0]));
+    assert.ok(
+      expectValue(lesson.resources).every((r) => r.provider === 'Фоксфорд Учебник' && r.language === 'ru'),
+    );
   }
   assert.deepEqual([...positions].sort(), [0, 1, 2]);
 });

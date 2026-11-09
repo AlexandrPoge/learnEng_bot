@@ -1,3 +1,4 @@
+import { expectValue } from '../../helpers/expectations.js';
 import { harness, assignment } from './helpers.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -16,7 +17,7 @@ test('test homework keeps answers hidden until completion, then opens its frozen
 
   for (const [index, question] of attempt.lesson.questions.entries()) {
     if (question.type === 'choice') {
-      h.click(20, `a:${attempt.id}:${index}:${question.options.indexOf(question.accepted[0])}`);
+      h.click(20, `a:${attempt.id}:${index}:${expectValue(question.options).indexOf(question.accepted[0])}`);
     } else {
       h.send(20, question.accepted[0]);
     }

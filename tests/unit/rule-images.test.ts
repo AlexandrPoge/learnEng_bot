@@ -44,7 +44,7 @@ test('media delivery uploads once, caches file_id and replaces invalid cached ph
   };
   const sent: unknown[] = [];
   let rejectCache = false;
-  const api = (async (method, payload) => {
+  const api = (async (_method, payload) => {
     sent.push(payload?.photo);
     if (rejectCache && typeof payload?.photo === 'string') throw new TelegramError(400);
     return { photo: [{ file_id: 'telegram-file-id' }] };

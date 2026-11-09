@@ -1,3 +1,4 @@
+import { expectValue } from '../helpers/expectations.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { emptyState } from '../../apps/bot/src/store.js';
@@ -45,7 +46,8 @@ test('five individually assigned students produce five compact notices, with ful
     const attempt = state.attempts[state.users[String(sid)].activeAttempt!];
     attempts.push(attempt.id);
     for (const [index, q] of attempt.lesson.questions.entries()) {
-      if (q.type === 'choice') click(sid, `a:${attempt.id}:${index}:${q.options.indexOf(q.accepted[0])}`);
+      if (q.type === 'choice')
+        click(sid, `a:${attempt.id}:${index}:${expectValue(q.options).indexOf(q.accepted[0])}`);
       else send(sid, q.accepted[0]);
     }
   }
@@ -90,7 +92,8 @@ test('five individually assigned students produce five compact notices, with ful
   send(20, '/practice to-be');
   const quiet = state.attempts[state.users['20'].activeAttempt!];
   for (const [index, q] of quiet.lesson.questions.entries()) {
-    if (q.type === 'choice') click(20, `a:${quiet.id}:${index}:${q.options.indexOf(q.accepted[0])}`);
+    if (q.type === 'choice')
+      click(20, `a:${quiet.id}:${index}:${expectValue(q.options).indexOf(q.accepted[0])}`);
     else send(20, q.accepted[0]);
   }
   assert.ok(quiet.completedAt);

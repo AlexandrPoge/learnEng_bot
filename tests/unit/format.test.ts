@@ -1,3 +1,4 @@
+import { expectValue } from '../helpers/expectations.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { richText, exampleBlocks, splitMessage } from '../../apps/bot/src/format.js';
@@ -9,7 +10,7 @@ test('English, translation and explanation are separated, with UTF-16-safe bold 
   const formatted = exampleBlocks('She reads. — Она читает. После she нужна форма reads.');
   assert.match(formatted.text, /🇬🇧 Пример\nShe reads\.\n\n🇷🇺 Перевод\nОна читает\.\n\n🔎 Почему так\nПосле/u);
   assert.ok(
-    formatted.entities.some(
+    expectValue(formatted.entities).some(
       (entity) => formatted.text.slice(entity.offset, entity.offset + entity.length) === 'She reads.',
     ),
   );
@@ -25,16 +26,16 @@ test('long rich messages preserve text and valid entities when splitting around 
     for (const entity of chunk.entities ?? [])
       assert.ok(entity.offset >= 0 && entity.offset + entity.length <= chunk.text.length);
   }
-  assert.ok(chunks.at(-1).text.includes('<b>Текст репетитора & пример</b>'));
+  assert.ok(expectValue(chunks.at(-1)).text.includes('<b>Текст репетитора & пример</b>'));
 });
 
 test('every child and adult card in the curriculum produces valid formatting', () => {
   for (const lesson of lessons) {
     for (const child of [true, false]) {
       const cards = [topicCard(lesson, child)];
-      for (const section of ['rule', 'examples', 'traps']) {
+      for (const section of ['rule', 'examples', 'traps'] as const) {
         for (let page = 0; page < sectionPages(lesson, section).length; page++)
-          cards.push(sectionCard(lesson, section, page, child));
+          cards.push(expectValue(sectionCard(lesson, section, page, child)));
       }
       for (const card of cards) {
         assert.ok(card.text.includes('\n\n'), lesson.id);

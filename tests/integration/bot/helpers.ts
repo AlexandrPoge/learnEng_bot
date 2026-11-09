@@ -5,7 +5,7 @@ import { handleUpdate } from '../../../apps/bot/src/handler.js';
 export function harness() {
   const state = emptyState();
   let updateId = 0;
-  const text = (id, body) => {
+  const text = (id: number, body: string) => {
     const update = {
       update_id: updateId++,
       message: { from: { id, first_name: `User ${id}` }, chat: { id, type: 'private' }, text: body },
@@ -13,7 +13,7 @@ export function harness() {
     handleUpdate(state, update, ['10', '11']);
     return update;
   };
-  const action = (id, data) =>
+  const action = (id: number, data: string) =>
     handleUpdate(
       state,
       {
@@ -27,6 +27,7 @@ export function harness() {
       },
       ['10', '11'],
     );
-  const click = (id, attemptId, index, option) => action(id, `a:${attemptId}:${index}:${option}`);
+  const click = (id: number, attemptId: string, index: number, option: number) =>
+    action(id, `a:${attemptId}:${index}:${option}`);
   return { state, text, click, action };
 }
