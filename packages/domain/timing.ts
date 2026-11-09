@@ -10,7 +10,16 @@ export function recordActivity(attempt: Attempt, now = new Date().toISOString())
 }
 
 export function timeSummary(attempt: Attempt) {
-  const seconds = Math.max(0, Math.round((Date.parse(attempt.completedAt ?? new Date().toISOString()) - Date.parse(attempt.startedAt)) / 1000));
-  return `⏱ Всего: ${seconds} сек. (включая перерывы)` +
-    (attempt.engagedMs === undefined ? '' : `\nМежду действиями: ≈${Math.round(attempt.engagedMs / 1000)} сек.\nИнтервалы больше 5 минут исключены; это оценка.`);
+  const seconds = Math.max(
+    0,
+    Math.round(
+      (Date.parse(attempt.completedAt ?? new Date().toISOString()) - Date.parse(attempt.startedAt)) / 1000,
+    ),
+  );
+  return (
+    `⏱ Всего: ${seconds} сек. (включая перерывы)` +
+    (attempt.engagedMs === undefined
+      ? ''
+      : `\nМежду действиями: ≈${Math.round(attempt.engagedMs / 1000)} сек.\nИнтервалы больше 5 минут исключены; это оценка.`)
+  );
 }

@@ -2,14 +2,24 @@ import { createHash } from 'node:crypto';
 import { lessonSections } from '../../../packages/content/presentation.js';
 import type { Lesson } from '../../../packages/domain/types.js';
 
-const escapeXml = (s: string) => s.replace(/[<>&"']/gu, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&apos;' }[c]!));
+const escapeXml = (s: string) =>
+  s.replace(
+    /[<>&"']/gu,
+    (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&apos;' })[c]!,
+  );
 function wrap(text: string, width: number) {
   const lines: string[] = [];
   let line = '';
   for (const word of text.split(/\s+/u)) {
-    const chunks = Array.from(word).join('').match(new RegExp(`.{1,${width}}`, 'gu')) ?? [];
+    const chunks =
+      Array.from(word)
+        .join('')
+        .match(new RegExp(`.{1,${width}}`, 'gu')) ?? [];
     for (const chunk of chunks) {
-      if (line && Array.from(`${line} ${chunk}`).length > width) { lines.push(line); line = ''; }
+      if (line && Array.from(`${line} ${chunk}`).length > width) {
+        lines.push(line);
+        line = '';
+      }
       line += `${line ? ' ' : ''}${chunk}`;
     }
   }
@@ -22,7 +32,10 @@ export function ruleImagePages(lesson: Lesson): string[][] {
   let current: string[] = [];
   for (const paragraph of lessonSections(lesson).rule) {
     const lines = wrap(paragraph, 48);
-    if (current.length && current.length + lines.length + 1 > 17) { pages.push(current); current = []; }
+    if (current.length && current.length + lines.length + 1 > 17) {
+      pages.push(current);
+      current = [];
+    }
     while (lines.length > 17) pages.push(lines.splice(0, 17));
     if (lines.length) current.push(...(current.length ? [''] : []), ...lines);
   }
@@ -30,7 +43,18 @@ export function ruleImagePages(lesson: Lesson): string[][] {
   return pages.length ? pages : [['Правило пока не добавлено.']];
 }
 export function ruleImageKey(lesson: Lesson, page: number) {
-  return createHash('sha256').update(JSON.stringify({ renderer: 1, title: lesson.title, level: lesson.level, memory: lesson.memory, rule: lessonSections(lesson).rule, page })).digest('hex');
+  return createHash('sha256')
+    .update(
+      JSON.stringify({
+        renderer: 1,
+        title: lesson.title,
+        level: lesson.level,
+        memory: lesson.memory,
+        rule: lessonSections(lesson).rule,
+        page,
+      }),
+    )
+    .digest('hex');
 }
 
 export function ruleImageSvg(lesson: Lesson, page: number) {
@@ -40,7 +64,8 @@ export function ruleImageSvg(lesson: Lesson, page: number) {
   const memory = lesson.memory ? wrap(lesson.memory, 48) : [];
   const bodyY = 210 + titles.length * 53 + (memory.length ? memory.length * 42 + 65 : 0);
   const height = bodyY + pages[page].length * 45 + 140;
-  const line = (text: string, x: number, y: number, size = 32, fill = '#183244', weight = 400) => `<text x="${x}" y="${y}" font-family="Arial, sans-serif" font-size="${size}" font-weight="${weight}" fill="${fill}">${escapeXml(text)}</text>`;
+  const line = (text: string, x: number, y: number, size = 32, fill = '#183244', weight = 400) =>
+    `<text x="${x}" y="${y}" font-family="Arial, sans-serif" font-size="${size}" font-weight="${weight}" fill="${fill}">${escapeXml(text)}</text>`;
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="${height}" viewBox="0 0 1080 ${height}">
     <rect width="1080" height="${height}" fill="#edf4f8"/>
     <rect x="35" y="35" width="1010" height="${height - 70}" rx="35" fill="white"/>

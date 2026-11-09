@@ -7,8 +7,28 @@ import { lessonSections, sectionPages } from '../../packages/content/presentatio
 
 function harness() {
   const state = emptyState();
-  const text = (id, value) => handleUpdate(state, { update_id: state.offset, message: { from: { id }, chat: { id, type: 'private' }, text: value } }, ['20'], ['10']);
-  const click = (id, data) => handleUpdate(state, { update_id: state.offset, callback_query: { id: `cb-${state.offset}`, from: { id }, message: { message_id: 50, chat: { id, type: 'private' } }, data } }, ['20'], ['10']);
+  const text = (id, value) =>
+    handleUpdate(
+      state,
+      { update_id: state.offset, message: { from: { id }, chat: { id, type: 'private' }, text: value } },
+      ['20'],
+      ['10'],
+    );
+  const click = (id, data) =>
+    handleUpdate(
+      state,
+      {
+        update_id: state.offset,
+        callback_query: {
+          id: `cb-${state.offset}`,
+          from: { id },
+          message: { message_id: 50, chat: { id, type: 'private' } },
+          data,
+        },
+      },
+      ['20'],
+      ['10'],
+    );
   return { state, text, click, last: () => state.outbox.at(-1) };
 }
 
@@ -20,7 +40,10 @@ test('all 106 topics have icons, simple explanations, and separate short section
     const sections = lessonSections(lesson);
     for (const section of ['rule', 'examples', 'traps']) {
       assert.ok(sections[section].length, `${lesson.id}/${section}`);
-      assert.ok(sectionPages(lesson, section).every((page) => page.length <= 650), lesson.id);
+      assert.ok(
+        sectionPages(lesson, section).every((page) => page.length <= 650),
+        lesson.id,
+      );
     }
   }
 });
@@ -48,14 +71,22 @@ test('inline navigation sends a new card at the bottom and retires the previous 
   assert.equal(last().payload.text.includes('I see a dog'), false);
   click(30, 's:articles:examples:0');
   assert.equal(last().method, 'sendMessage');
-  assert.ok(state.outbox.some((task) => task.method === 'editMessageReplyMarkup' && task.payload.message_id === 50));
-  assert.ok(state.outbox.some((task) => task.method === 'answerCallbackQuery' && task.payload.text.includes('внизу')));
+  assert.ok(
+    state.outbox.some((task) => task.method === 'editMessageReplyMarkup' && task.payload.message_id === 50),
+  );
+  assert.ok(
+    state.outbox.some((task) => task.method === 'answerCallbackQuery' && task.payload.text.includes('внизу')),
+  );
   assert.match(last().payload.text, /I see a dog/u);
   assert.equal(Object.keys(state.attempts).length, 0);
   click(30, 's:articles:examples:999');
   assert.match(last().payload.text, /недоступна/u);
   click(30, 't:articles');
-  assert.ok(last().payload.reply_markup.inline_keyboard.some((row) => row.some((button) => button.text === '✏️ Практика')));
+  assert.ok(
+    last().payload.reply_markup.inline_keyboard.some((row) =>
+      row.some((button) => button.text === '✏️ Практика'),
+    ),
+  );
 });
 
 test('teacher buttons edit only their chosen section and enforce permissions', () => {
@@ -98,7 +129,8 @@ test('answer review uses the attempt snapshot and is private to its student', ()
   text(30, '/practice to-be');
   const attempt = state.attempts[state.users['30'].activeAttempt];
   for (const [index, question] of attempt.lesson.questions.entries()) {
-    if (question.type === 'choice') click(30, `a:${attempt.id}:${index}:${question.options.indexOf(question.accepted[0])}`);
+    if (question.type === 'choice')
+      click(30, `a:${attempt.id}:${index}:${question.options.indexOf(question.accepted[0])}`);
     else text(30, question.accepted[0]);
   }
   click(30, `review:${attempt.id}`);

@@ -26,24 +26,32 @@ export async function configureProfile(api: TelegramApi, adminIds: string[]) {
 }
 
 export async function configureDescriptions(api: TelegramApi) {
-  await api('setMyDescription', { description: 'Английский A1–B2 для детей и взрослых: 106 тем, школьные подборки, понятные правила, картинки, примеры и практика. Репетитор создаёт свои ДЗ и видит ответы, результат и время. Нажми «Начать» → «Учебник».' });
-  await api('setMyShortDescription', { short_description: 'Английский A1–B2: учебник по классам и уровням, упражнения и свои ДЗ с репетитором.' });
+  await api('setMyDescription', {
+    description:
+      'Английский A1–B2 для детей и взрослых: 106 тем, школьные подборки, понятные правила, картинки, примеры и практика. Репетитор создаёт свои ДЗ и видит ответы, результат и время. Нажми «Начать» → «Учебник».',
+  });
+  await api('setMyShortDescription', {
+    short_description: 'Английский A1–B2: учебник по классам и уровням, упражнения и свои ДЗ с репетитором.',
+  });
 }
 
 export async function configureCommands(api: TelegramApi, adminIds: string[]) {
   await api('setMyCommands', { commands: publicCommands });
   for (const id of adminIds) {
-    await api('setMyCommands', { scope: { type: 'chat', chat_id: id }, commands: [
-      ...publicCommands,
-      { command: 'admin', description: 'Управление и роли' },
-      { command: 'editor', description: 'Редактор учебных материалов' },
-      { command: 'teacher', description: '👩‍🏫 Кабинет репетитора' },
-      { command: 'my_homework', description: '📝 Создать и назначить своё ДЗ' },
-      { command: 'new_class', description: '👥 Создать учебную группу' },
-      { command: 'notifications', description: '🔔 Короткие уведомления или тихий режим' },
-      { command: 'sent_homework', description: '📤 Сдача работ, ответы и время' },
-      { command: 'invite', description: 'Пригласить ученика' },
-      { command: 'results', description: 'Работы учеников' },
-    ] });
+    await api('setMyCommands', {
+      scope: { type: 'chat', chat_id: id },
+      commands: [
+        ...publicCommands,
+        { command: 'admin', description: 'Управление и роли' },
+        { command: 'editor', description: 'Редактор учебных материалов' },
+        { command: 'teacher', description: '👩‍🏫 Кабинет репетитора' },
+        { command: 'my_homework', description: '📝 Создать и назначить своё ДЗ' },
+        { command: 'new_class', description: '👥 Создать учебную группу' },
+        { command: 'notifications', description: '🔔 Короткие уведомления или тихий режим' },
+        { command: 'sent_homework', description: '📤 Сдача работ, ответы и время' },
+        { command: 'invite', description: 'Пригласить ученика' },
+        { command: 'results', description: 'Работы учеников' },
+      ],
+    });
   }
 }

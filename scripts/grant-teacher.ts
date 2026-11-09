@@ -27,4 +27,6 @@ try {
   } catch (error) {
     console.log(`Уведомление пока не доставлено (${error.message}). Оно сохранено для первого /start.`);
   }
-} finally { await store.close(); }
+} finally {
+  await store.close();
+}

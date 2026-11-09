@@ -1,0 +1,7 @@
+node_modules/
+dist/
+.cloud-build/
+.wrangler/
+data/
+package-lock.json
+.cloud-secrets.json

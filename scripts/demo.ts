@@ -8,18 +8,33 @@ import { telegramClient } from '../apps/bot/src/telegram.js';
 const state = emptyState();
 let offset = 0;
 function message(text: string) {
-  handleUpdate(state, { update_id: offset++, message: {
-    from: { id: 1, first_name: 'Демо-ученик' }, chat: { id: 1, type: 'private' }, text,
-  } });
+  handleUpdate(state, {
+    update_id: offset++,
+    message: {
+      from: { id: 1, first_name: 'Демо-ученик' },
+      chat: { id: 1, type: 'private' },
+      text,
+    },
+  });
 }
 function answer(index: number, option: number) {
   const id = state.users['1'].activeAttempt;
-  handleUpdate(state, { update_id: offset++, callback_query: {
-    id: `demo-${offset}`, from: { id: 1 }, message: { chat: { id: 1, type: 'private' } }, data: `a:${id}:${index}:${option}`,
-  } });
+  handleUpdate(state, {
+    update_id: offset++,
+    callback_query: {
+      id: `demo-${offset}`,
+      from: { id: 1 },
+      message: { chat: { id: 1, type: 'private' } },
+      data: `a:${id}:${index}:${option}`,
+    },
+  });
 }
 message('/practice present-simple');
-answer(0, 1); answer(1, 2); message('plays'); answer(3, 1); message('watches');
+answer(0, 1);
+answer(1, 2);
+message('plays');
+answer(3, 1);
+message('watches');
 const attempt = Object.values(state.attempts)[0];
 const report = buildReport(attempt, 'Демо-ученик');
 console.log(report);
@@ -35,5 +50,8 @@ if (process.argv.includes('--send-admin')) {
       });
       console.log(`Демо доставлено администратору, message_id=${sent.message_id}`);
     }
-  } catch (error) { console.error(`${error.message}. Для доставки администратор должен нажать /start у бота.`); process.exitCode = 1; }
+  } catch (error) {
+    console.error(`${error.message}. Для доставки администратор должен нажать /start у бота.`);
+    process.exitCode = 1;
+  }
 }

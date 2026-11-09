@@ -20,12 +20,17 @@
     "cloud:control": "node --env-file=.env --import tsx scripts/cloud-control.ts",
     "test": "node --import tsx --test tests/unit/*.test.ts tests/integration/*.test.ts",
     "check": "tsc --noEmit",
+    "check:structure": "node --import tsx scripts/check-structure.ts",
+    "format": "prettier --write apps packages scripts tests package.json tsconfig.json .prettierrc.json",
+    "format:check": "prettier --check apps packages scripts tests package.json tsconfig.json .prettierrc.json",
+    "quality": "npm run format:check && npm run check:structure && npm run check",
     "build": "tsc"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20261108.1",
     "@types/node": "^22.20.5",
     "miniflare": "^5.20261104.0-beta",
+    "prettier": "3.6.2",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2",
     "wrangler": "^4.158.0"

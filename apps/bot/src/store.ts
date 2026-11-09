@@ -10,15 +10,21 @@ export function emptyState(): BotState {
 export async function openStore(path: string) {
   await mkdir(dirname(path), { recursive: true });
   let lock;
-  try { lock = await open(`${path}.lock`, 'wx', 0o600); }
-  catch (error) {
-    if (error.code === 'EEXIST') throw new Error('Хранилище занято: проверьте, не запущена ли другая копия бота. См. README.');
+  try {
+    lock = await open(`${path}.lock`, 'wx', 0o600);
+  } catch (error) {
+    if (error.code === 'EEXIST')
+      throw new Error('Хранилище занято: проверьте, не запущена ли другая копия бота. См. README.');
     throw error;
   }
   let state: BotState;
   try {
-    try { state = JSON.parse(await readFile(path, 'utf8')); }
-    catch (error) { if (error.code === 'ENOENT') state = emptyState(); else throw error; }
+    try {
+      state = JSON.parse(await readFile(path, 'utf8'));
+    } catch (error) {
+      if (error.code === 'ENOENT') state = emptyState();
+      else throw error;
+    }
     if (state.version !== 1 || !state.users || !state.attempts || !Array.isArray(state.outbox)) {
       throw new Error('Неподдерживаемый или повреждённый файл данных.');
     }
@@ -28,14 +34,23 @@ export async function openStore(path: string) {
     throw error;
   }
   return {
-    get state() { return state; },
+    get state() {
+      return state;
+    },
     async commit(next: BotState) {
       const file = await open(`${path}.tmp`, 'w', 0o600);
-      try { await file.writeFile(JSON.stringify(next)); await file.sync(); }
-      finally { await file.close(); }
+      try {
+        await file.writeFile(JSON.stringify(next));
+        await file.sync();
+      } finally {
+        await file.close();
+      }
       await rename(`${path}.tmp`, path);
       state = next;
     },
-    async close() { await lock.close(); await rm(`${path}.lock`); },
+    async close() {
+      await lock.close();
+      await rm(`${path}.lock`);
+    },
   };
 }

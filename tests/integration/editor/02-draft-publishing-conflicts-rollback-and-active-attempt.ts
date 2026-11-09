@@ -1,0 +1,30 @@
+import { setup } from './helpers.js';
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { findLesson } from '../../../apps/bot/src/editor.js';
+
+test('draft publishing, conflicts, rollback, and active attempt snapshots', () => {
+  const { state, send, last } = setup();
+  send(30, '/practice articles');
+  const attempt = state.attempts[state.users['30'].activeAttempt];
+  const original = attempt.lesson.theory;
+  const originalVersion = attempt.lesson.version;
+  send(10, '/add_teacher 20');
+  send(10, '/edit articles');
+  send(20, '/edit articles');
+  send(10, '/theory Новое объяснение с примерами.');
+  assert.equal(findLesson(state, 'articles').theory, original);
+  send(10, '/publish');
+  assert.equal(findLesson(state, 'articles').version, originalVersion + 1);
+  assert.equal(attempt.lesson.version, originalVersion);
+  assert.equal(attempt.lesson.theory, original);
+  send(20, '/publish');
+  assert.match(last(), /другим редактором/u);
+  send(10, `/restore articles ${originalVersion}`);
+  assert.equal(findLesson(state, 'articles').version, originalVersion + 2);
+  assert.equal(findLesson(state, 'articles').theory, original);
+  send(10, '/history articles');
+  assert.ok(last().includes(`Версия ${originalVersion + 1}`));
+  send(30, '/editor');
+  assert.match(last(), /доступен репетитору/u);
+});

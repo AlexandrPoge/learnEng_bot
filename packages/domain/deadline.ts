@@ -4,7 +4,14 @@ export function parseDeadline(value: string | undefined) {
   if (!match) return null;
   const [, year, month, day, hour, minute] = match;
   const calendar = new Date(Date.UTC(Number(year), Number(month) - 1, Number(day)));
-  if (calendar.getUTCFullYear() !== Number(year) || calendar.getUTCMonth() + 1 !== Number(month) || calendar.getUTCDate() !== Number(day) || Number(hour) > 23 || Number(minute) > 59) return null;
+  if (
+    calendar.getUTCFullYear() !== Number(year) ||
+    calendar.getUTCMonth() + 1 !== Number(month) ||
+    calendar.getUTCDate() !== Number(day) ||
+    Number(hour) > 23 ||
+    Number(minute) > 59
+  )
+    return null;
   const timestamp = Date.parse(value!);
   return Number.isFinite(timestamp) ? new Date(timestamp).toISOString() : null;
 }

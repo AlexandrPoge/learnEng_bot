@@ -10,12 +10,17 @@ export function richText() {
       value.text += part;
       return this;
     },
-    build() { return value; },
+    build() {
+      return value;
+    },
   };
 }
 
 export function readable(text: string) {
-  return text.replace(/\s+·\s+/gu, '\n').replace(/([.!?])\s+(?=[А-ЯЁA-Z])/gu, '$1\n\n').replace(/;\s+/gu, ';\n');
+  return text
+    .replace(/\s+·\s+/gu, '\n')
+    .replace(/([.!?])\s+(?=[А-ЯЁA-Z])/gu, '$1\n\n')
+    .replace(/;\s+/gu, ';\n');
 }
 
 export function exampleBlocks(text: string) {
@@ -26,8 +31,11 @@ export function exampleBlocks(text: string) {
   const match = /^(.*?[.!?])\s+(.+)$/u.exec(rest);
   const translation = match ? match[1] : rest;
   const explanation = match?.[2]?.replace(/^(Разбор|Почему):\s*/u, '');
-  const result = richText().add('🇬🇧 Пример\n', 'bold').add(english, 'bold')
-    .add('\n\n🇷🇺 Перевод\n', 'bold').add(translation);
+  const result = richText()
+    .add('🇬🇧 Пример\n', 'bold')
+    .add(english, 'bold')
+    .add('\n\n🇷🇺 Перевод\n', 'bold')
+    .add(translation);
   if (explanation) result.add('\n\n🔎 Почему так\n', 'bold').add(readable(explanation));
   return result.build();
 }
@@ -54,7 +62,9 @@ export function combine(...parts: (string | RichText)[]): RichText {
   const result: RichText = { text: '', entities: [] };
   for (const part of parts) {
     const item = typeof part === 'string' ? { text: part, entities: [] } : part;
-    result.entities.push(...(item.entities ?? []).map((entity) => ({ ...entity, offset: entity.offset + result.text.length })));
+    result.entities.push(
+      ...(item.entities ?? []).map((entity) => ({ ...entity, offset: entity.offset + result.text.length })),
+    );
     result.text += item.text;
   }
   return result;

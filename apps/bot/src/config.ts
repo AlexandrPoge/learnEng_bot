@@ -3,8 +3,14 @@ export function readConfig(env = process.env) {
   if (!token || !/^\d+:[A-Za-z0-9_-]+$/u.test(token)) {
     throw new Error('Укажите TELEGRAM_BOT_TOKEN из @BotFather в .env.');
   }
-  const teacherIds = (env.TEACHER_IDS ?? '').split(',').map((id) => id.trim()).filter(Boolean);
-  const adminIds = (env.ADMIN_IDS ?? '').split(',').map((id) => id.trim()).filter(Boolean);
+  const teacherIds = (env.TEACHER_IDS ?? '')
+    .split(',')
+    .map((id) => id.trim())
+    .filter(Boolean);
+  const adminIds = (env.ADMIN_IDS ?? '')
+    .split(',')
+    .map((id) => id.trim())
+    .filter(Boolean);
   if ([...teacherIds, ...adminIds].some((id) => !/^[1-9]\d*$/u.test(id))) {
     throw new Error('TEACHER_IDS и ADMIN_IDS должны содержать положительные числовые ID через запятую.');
   }

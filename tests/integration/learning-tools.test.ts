@@ -7,13 +7,38 @@ import { lessonSections } from '../../packages/content/presentation.js';
 
 function harness() {
   const state = emptyState();
-  const text = (id, body) => handleUpdate(state, { update_id: state.offset, message: { from: { id }, chat: { id, type: 'private' }, text: body } }, [], ['10']);
-  const click = (id, data) => handleUpdate(state, { update_id: state.offset, callback_query: { id: `c-${state.offset}`, from: { id }, message: { message_id: 77, chat: { id, type: 'private' } }, data } }, [], ['10']);
+  const text = (id, body) =>
+    handleUpdate(
+      state,
+      { update_id: state.offset, message: { from: { id }, chat: { id, type: 'private' }, text: body } },
+      [],
+      ['10'],
+    );
+  const click = (id, data) =>
+    handleUpdate(
+      state,
+      {
+        update_id: state.offset,
+        callback_query: {
+          id: `c-${state.offset}`,
+          from: { id },
+          message: { message_id: 77, chat: { id, type: 'private' } },
+          data,
+        },
+      },
+      [],
+      ['10'],
+    );
   return { state, text, click, last: () => state.outbox.at(-1).payload };
 }
 
 test('every topic has examples and labelled publisher resources or collections', () => {
-  const allowed = ['learnenglish.britishcouncil.org', 'learnenglishkids.britishcouncil.org', 'learnenglishteens.britishcouncil.org', 'foxford.ru'];
+  const allowed = [
+    'learnenglish.britishcouncil.org',
+    'learnenglishkids.britishcouncil.org',
+    'learnenglishteens.britishcouncil.org',
+    'foxford.ru',
+  ];
   for (const lesson of lessons) {
     const sections = lessonSections(lesson);
     assert.ok(sections.rule.length >= 4, lesson.id);
@@ -49,8 +74,16 @@ test('resources show a labelled external page and return to the same topic', () 
   click(20, 'sources:prepositions-place');
   assert.match(last().text, /Hero/u);
   assert.match(last().text, /английском/u);
-  assert.ok(last().reply_markup.inline_keyboard.some((row) => row.some((button) => button.url?.endsWith('/heros-adventure'))));
-  assert.ok(last().reply_markup.inline_keyboard.at(-1).some((button) => button.callback_data === 't:prepositions-place'));
+  assert.ok(
+    last().reply_markup.inline_keyboard.some((row) =>
+      row.some((button) => button.url?.endsWith('/heros-adventure')),
+    ),
+  );
+  assert.ok(
+    last()
+      .reply_markup.inline_keyboard.at(-1)
+      .some((button) => button.callback_data === 't:prepositions-place'),
+  );
 });
 
 test('hint never consumes an answer, and repetition uses only the original mistaken question', () => {
@@ -62,10 +95,16 @@ test('hint never consumes an answer, and repetition uses only the original mista
   assert.equal(attempt.answers.length, 0);
   assert.deepEqual(attempt.hintsUsed, [0]);
   for (const [index, question] of attempt.lesson.questions.entries()) {
-    if (question.type === 'choice') click(20, `a:${attempt.id}:${index}:${index === 0 ? 0 : question.options.indexOf(question.accepted[0])}`);
+    if (question.type === 'choice')
+      click(
+        20,
+        `a:${attempt.id}:${index}:${index === 0 ? 0 : question.options.indexOf(question.accepted[0])}`,
+      );
     else text(20, question.accepted[0]);
   }
-  text(10, '/edit present-simple'); text(10, '/remove_question q1'); text(10, '/publish');
+  text(10, '/edit present-simple');
+  text(10, '/remove_question q1');
+  text(10, '/publish');
   click(30, `repeat:${attempt.id}`);
   assert.match(last().text, /твоей завершённой/u);
   click(20, `repeat:${attempt.id}`);

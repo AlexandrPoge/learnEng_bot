@@ -19,15 +19,19 @@ async function run() {
     while (store.state.outbox.length && !controller.signal.aborted) {
       const task = store.state.outbox[0];
       // Отзыв доступа действует также на ещё не доставленные отчёты.
-      if ((task.requiredTeacher || task.payload.text?.startsWith('Новое выполненное задание')) && !rolesFor(store.state, config.teacherIds, config.adminIds).isTeacher(String(task.payload.chat_id))) {
+      if (
+        (task.requiredTeacher || task.payload.text?.startsWith('Новое выполненное задание')) &&
+        !rolesFor(store.state, config.teacherIds, config.adminIds).isTeacher(String(task.payload.chat_id))
+      ) {
         const next = structuredClone(store.state);
         next.outbox.shift();
         await store.commit(next);
         continue;
       }
       let imageCache: { key: string; fileId: string } | undefined;
-      try { imageCache = await deliverTask(store.state, task, api, controller.signal); }
-      catch (error) {
+      try {
+        imageCache = await deliverTask(store.state, task, api, controller.signal);
+      } catch (error) {
         // Недоступный чат или истёкший callback не блокируют остальные отчёты.
         if (![400, 403].includes(error.code)) throw error;
         console.warn(`Сообщение не доставлено: ${error.message}`);
@@ -41,15 +45,24 @@ async function run() {
 
   try {
     const info = await api('getWebhookInfo');
-    if (info.url) throw new Error('У бота установлен webhook. Для long polling отключите его или используйте отдельного тестового бота.');
+    if (info.url)
+      throw new Error(
+        'У бота установлен webhook. Для long polling отключите его или используйте отдельного тестового бота.',
+      );
     const me = await api('getMe');
     console.log(`Бот @${me.username} запущен. Остановка: Ctrl+C`);
     while (!controller.signal.aborted) {
       try {
         await flush();
-        const updates = await api('getUpdates', {
-          offset: store.state.offset, timeout: 30, allowed_updates: ['message', 'callback_query'],
-        }, controller.signal);
+        const updates = await api(
+          'getUpdates',
+          {
+            offset: store.state.offset,
+            timeout: 30,
+            allowed_updates: ['message', 'callback_query'],
+          },
+          controller.signal,
+        );
         for (const update of updates) {
           if (controller.signal.aborted) break;
           const next = structuredClone(store.state);
@@ -61,10 +74,17 @@ async function run() {
         if (controller.signal.aborted) break;
         if ([401, 409].includes(error.code)) throw error;
         console.error(error.message);
-        await delay(Math.min(60, Math.max(3, error.retryAfter ?? 3)) * 1000, undefined, { signal: controller.signal }).catch(() => {});
+        await delay(Math.min(60, Math.max(3, error.retryAfter ?? 3)) * 1000, undefined, {
+          signal: controller.signal,
+        }).catch(() => {});
       }
     }
-  } finally { await store.close(); }
+  } finally {
+    await store.close();
+  }
 }
 
-run().catch((error) => { console.error(error.message); process.exitCode = 1; });
+run().catch((error) => {
+  console.error(error.message);
+  process.exitCode = 1;
+});

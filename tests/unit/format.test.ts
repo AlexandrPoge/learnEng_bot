@@ -8,7 +8,11 @@ import { sectionPages } from '../../packages/content/presentation.js';
 test('English, translation and explanation are separated, with UTF-16-safe bold spans', () => {
   const formatted = exampleBlocks('She reads. — Она читает. После she нужна форма reads.');
   assert.match(formatted.text, /🇬🇧 Пример\nShe reads\.\n\n🇷🇺 Перевод\nОна читает\.\n\n🔎 Почему так\nПосле/u);
-  assert.ok(formatted.entities.some((entity) => formatted.text.slice(entity.offset, entity.offset + entity.length) === 'She reads.'));
+  assert.ok(
+    formatted.entities.some(
+      (entity) => formatted.text.slice(entity.offset, entity.offset + entity.length) === 'She reads.',
+    ),
+  );
 });
 
 test('long rich messages preserve text and valid entities when splitting around emoji', () => {
@@ -18,7 +22,8 @@ test('long rich messages preserve text and valid entities when splitting around 
   for (const chunk of chunks) {
     assert.ok(chunk.text.length <= 1900);
     assert.equal(/^[\uDC00-\uDFFF]/u.test(chunk.text), false);
-    for (const entity of chunk.entities ?? []) assert.ok(entity.offset >= 0 && entity.offset + entity.length <= chunk.text.length);
+    for (const entity of chunk.entities ?? [])
+      assert.ok(entity.offset >= 0 && entity.offset + entity.length <= chunk.text.length);
   }
   assert.ok(chunks.at(-1).text.includes('<b>Текст репетитора & пример</b>'));
 });
@@ -28,12 +33,16 @@ test('every child and adult card in the curriculum produces valid formatting', (
     for (const child of [true, false]) {
       const cards = [topicCard(lesson, child)];
       for (const section of ['rule', 'examples', 'traps']) {
-        for (let page = 0; page < sectionPages(lesson, section).length; page++) cards.push(sectionCard(lesson, section, page, child));
+        for (let page = 0; page < sectionPages(lesson, section).length; page++)
+          cards.push(sectionCard(lesson, section, page, child));
       }
       for (const card of cards) {
         assert.ok(card.text.includes('\n\n'), lesson.id);
         for (const entity of card.entities) {
-          assert.ok(entity.length > 0 && entity.offset >= 0 && entity.offset + entity.length <= card.text.length, lesson.id);
+          assert.ok(
+            entity.length > 0 && entity.offset >= 0 && entity.offset + entity.length <= card.text.length,
+            lesson.id,
+          );
           assert.ok(['bold', 'code'].includes(entity.type));
         }
       }

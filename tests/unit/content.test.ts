@@ -11,7 +11,11 @@ test('all published topics have usable questions and unambiguous choice keys', (
     for (const question of lesson.questions) {
       for (const answer of question.accepted) assert.equal(gradeAnswer(question, answer), true);
       if (question.type === 'choice') {
-        assert.equal(question.options.filter((answer) => gradeAnswer(question, answer)).length, 1, `${lesson.id}/${question.id}`);
+        assert.equal(
+          question.options.filter((answer) => gradeAnswer(question, answer)).length,
+          1,
+          `${lesson.id}/${question.id}`,
+        );
       }
     }
   }
