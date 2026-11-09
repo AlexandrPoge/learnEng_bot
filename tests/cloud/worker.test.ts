@@ -2,6 +2,7 @@ import { createCloudRuntime } from './runtime.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { rm, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { emptyState } from '../../apps/bot/src/store.js';
 import { fingerprint, matches } from '../../apps/cloud/src/security.js';
@@ -120,7 +121,7 @@ test('cloud webhook persists 30 concurrent pupils, deduplicates retries and rend
     const photoBytes = runtime.getPhoto();
     assert.ok(photoBytes, 'WASM renderer must upload an actual photo');
     assert.deepEqual([...photoBytes.slice(0, 8)], [137, 80, 78, 71, 13, 10, 26, 10]);
-    await writeFile('/private/tmp/learneng-cloud-rule.png', photoBytes);
+    await writeFile(join(directory, 'rule.png'), photoBytes);
     exported = await settled();
     assert.ok(Object.values(exported.ruleImages ?? {}).includes('cached-png'));
     assert.equal(matches('я', 'a'), false);
