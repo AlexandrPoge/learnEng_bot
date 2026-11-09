@@ -47,6 +47,9 @@ test('cloud webhook persists 30 concurrent pupils, deduplicates retries and rend
     assert.equal((await mf.dispatchFetch('https://test.invalid/admin/export')).status, 403);
     assert.equal((await mf.dispatchFetch('https://test.invalid/telegram', { method: 'POST', body: '{}' })).status, 403);
     const state = emptyState(); state.offset = 100; state.editors = {}; state.teacherWelcome = {};
+    state.outbox.push({ id: 'broken-card', method: 'sendPhoto', requiredTeacher: false,
+      payload: { chat_id: 1000, reply_markup: { inline_keyboard: [[{ text: '📖 Правило', callback_data: 'home' }]] } },
+      ruleCard: { page: 0, lesson: { id: 'broken-card', title: 'Invalid XML \u0000', level: 'A1', category: 'grammar', version: 1, estimatedMinutes: 5, theory: 'Rule', questions: [] } } });
     const imported = await (await request('/admin/import', state)).json() as any;
     assert.equal(imported.fingerprint, fingerprint(state));
     assert.equal((await request('/admin/import', state)).status, 409);
@@ -55,6 +58,9 @@ test('cloud webhook persists 30 concurrent pupils, deduplicates retries and rend
     const responses = await Promise.all(updates.toReversed().map(u => request('/telegram', u, false)));
     assert.ok(responses.every(r => r.status === 200));
     let exported = await settled(); assert.equal(Object.keys(exported.users).length, 30);
+    const fallback = calls.find(c => c.method === 'sendMessage' && c.payload.text?.startsWith('Картинка временно недоступна.'));
+    assert.ok(fallback, 'A broken card must fall back to text without blocking other pupils');
+    assert.equal(fallback.payload.reply_markup.inline_keyboard[0][0].text, '📖 Правило');
     await delay(50); const originalCount = calls.length;
     await request('/telegram', updates[0], false); await delay(100);
     assert.equal(calls.length, originalCount);
